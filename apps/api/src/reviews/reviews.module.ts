@@ -2,13 +2,19 @@ import { Module } from '@nestjs/common';
 import { ReviewsController } from './reviews.controller.js';
 import { ReviewsService } from './reviews.service.js';
 import { REVIEW_REPOSITORY } from './repositories/review-repository.interface.js';
-import { InMemoryReviewRepository } from './repositories/in-memory-review.repository.js';
+// import { InMemoryReviewRepository } from './repositories/in-memory-review.repository.js';
+import { DatabaseModule } from '../database/database.module.js';
+import { PostgresReviewRepository } from './repositories/postgres-review.repository.js';
 
 @Module({
+  imports: [DatabaseModule],
   controllers: [ReviewsController],
   providers: [
     ReviewsService,
-    { provide: REVIEW_REPOSITORY, useClass: InMemoryReviewRepository },
+    {
+      provide: REVIEW_REPOSITORY,
+      useClass: PostgresReviewRepository,
+    },
   ],
 })
 export class ReviewsModule {}
