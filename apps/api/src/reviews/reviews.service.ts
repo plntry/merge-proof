@@ -1,29 +1,36 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { CreateReviewDto } from './dto/create-review.dto.js';
-import { Review } from './types/review.type.js';
+import type { Review } from './types/review.type.js';
 import { UpdateReviewDto } from './dto/update-review.dto.js';
+import {
+  REVIEW_REPOSITORY,
+  type ReviewRepository,
+} from './repositories/review-repository.interface.js';
 
 @Injectable()
 export class ReviewsService {
-  private readonly reviews: Review[] = [];
+  constructor(
+    @Inject(REVIEW_REPOSITORY)
+    private readonly reviewRepository: ReviewRepository,
+  ) {}
 
-  create(dto: CreateReviewDto): Review {
+  create(dto: CreateReviewDto): Promise<Review> {
     const review: Review = {
       ...dto,
-      id: String(this.reviews.length + 1),
+      id: randomUUID(),
       status: 'pending',
     };
-    this.reviews.push(review);
 
-    return review;
+    return this.reviewRepository.save(review);
   }
 
-  findAll(): Review[] {
-    return this.reviews;
+  findAll(): Promise<Review[]> {
+    return this.reviewRepository.findAll();
   }
 
-  findOne(id: string): Review {
-    const review = this.reviews.find((review) => review.id === id);
+  async findOne(id: string): Promise<Review> {
+    const review = await this.reviewRepository.findById(id);
 
     if (!review) {
       throw new NotFoundException(`Review with id ${id} not found`);
@@ -32,20 +39,27 @@ export class ReviewsService {
     return review;
   }
 
-  update(id: string, dto: UpdateReviewDto): Review {
-    const review = this.findOne(id);
+  async update(id: string, dto: UpdateReviewDto): Promise<Review> {
+    const review = await this.findOne(id);
 
     if (dto.status !== undefined) {
       review.status = dto.status;
     }
 
-    return review;
+    const updatedReview = await this.reviewRepository.update(review);
+
+    if (!updatedReview) {
+      throw new NotFoundException(`Review with id ${id} not found`);
+    }
+
+    return updatedReview;
   }
 
-  remove(id: string) {
-    const review = this.findOne(id);
-    const reviewIndex = this.reviews.indexOf(review);
+  async remove(id: string): Promise<void> {
+    const removed = await this.reviewRepository.remove(id);
 
-    this.reviews.splice(reviewIndex, 1);
+    if (!removed) {
+      throw new NotFoundException(`Review with id ${id} not found`);
+    }
   }
 }
