@@ -1,0 +1,1 @@
+CREATE INDEX idx_reviews_created_at ON reviews (created_at DESC);
