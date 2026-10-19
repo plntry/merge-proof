@@ -1,11 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { Pool } from 'pg';
+import { Pool, type PoolClient } from 'pg';
 import { DATABASE_POOL } from '../../database/database.constants.js';
 import type { Review, ReviewStatus } from '../types/review.type.js';
 import type { ReviewRepository } from './review-repository.interface.js';
 
 type ReviewRow = {
   id: string;
+  organization_id: string;
   repository: string;
   pull_request_number: number;
   status: ReviewStatus;
@@ -21,6 +22,7 @@ export class PostgresReviewRepository implements ReviewRepository {
   private mapRowToReview(row: ReviewRow): Review {
     return {
       id: row.id,
+      organizationId: row.organization_id,
       repository: row.repository,
       status: row.status,
       pullRequestNumber: row.pull_request_number,
@@ -48,17 +50,26 @@ export class PostgresReviewRepository implements ReviewRepository {
     return this.mapRowToReview(row);
   }
 
-  async save(review: Review): Promise<Review> {
-    const result = await this.pool.query<ReviewRow>(
+  async save(review: Review, client?: PoolClient): Promise<Review> {
+    const db = client ?? this.pool;
+
+    const result = await db.query<ReviewRow>(
       `INSERT INTO reviews (
         id,
+        organization_id,
         repository,
         pull_request_number,
         status
       )
-      VALUES ($1, $2, $3, $4)
+      VALUES ($1, $2, $3, $4, $5)
       RETURNING *;`,
-      [review.id, review.repository, review.pullRequestNumber, review.status],
+      [
+        review.id,
+        review.organizationId,
+        review.repository,
+        review.pullRequestNumber,
+        review.status,
+      ],
     );
 
     const row = result.rows[0];
@@ -72,7 +83,8 @@ export class PostgresReviewRepository implements ReviewRepository {
       SET
         repository = $2,
         pull_request_number = $3,
-        status = $4
+        status = $4,
+        updated_at = NOW()
       WHERE id = $1
       RETURNING *;`,
       [review.id, review.repository, review.pullRequestNumber, review.status],

@@ -8,6 +8,7 @@ export type ReviewStatus = (typeof REVIEW_STATUSES)[number];
 
 export type Review = {
   id: string;
+  organizationId: string;
   repository: string;
   pullRequestNumber: number;
   status: ReviewStatus;

@@ -1,6 +1,15 @@
-import { IsInt, IsNotEmpty, IsPositive, IsString } from "class-validator";
+import {
+  IsInt,
+  IsNotEmpty,
+  IsPositive,
+  IsString,
+  IsUUID,
+} from 'class-validator';
 
 export class CreateReviewDto {
+  @IsUUID()
+  organizationId!: string;
+
   @IsString()
   @IsNotEmpty()
   repository!: string;
