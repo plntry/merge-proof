@@ -5,9 +5,10 @@ import { REVIEW_REPOSITORY } from './repositories/review-repository.interface.js
 // import { InMemoryReviewRepository } from './repositories/in-memory-review.repository.js';
 import { DatabaseModule } from '../database/database.module.js';
 import { PostgresReviewRepository } from './repositories/postgres-review.repository.js';
+import { OrganizationsModule } from '../organizations/organizations.module.js';
 
 @Module({
-  imports: [DatabaseModule],
+  imports: [DatabaseModule, OrganizationsModule],
   controllers: [ReviewsController],
   providers: [
     ReviewsService,

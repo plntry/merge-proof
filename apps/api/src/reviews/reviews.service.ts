@@ -1,4 +1,9 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { CreateReviewDto } from './dto/create-review.dto.js';
 import type { Review } from './types/review.type.js';
@@ -7,22 +12,55 @@ import {
   REVIEW_REPOSITORY,
   type ReviewRepository,
 } from './repositories/review-repository.interface.js';
+import { OrganizationsRepository } from '../organizations/organizations.repository.js';
+import { Pool } from 'pg';
+import { DATABASE_POOL } from '../database/database.constants.js';
 
 @Injectable()
 export class ReviewsService {
   constructor(
     @Inject(REVIEW_REPOSITORY)
     private readonly reviewRepository: ReviewRepository,
+
+    private readonly organizationsRepository: OrganizationsRepository,
+
+    @Inject(DATABASE_POOL)
+    private readonly pool: Pool,
   ) {}
 
-  create(dto: CreateReviewDto): Promise<Review> {
-    const review: Review = {
-      ...dto,
-      id: randomUUID(),
-      status: 'pending',
-    };
+  async create(dto: CreateReviewDto): Promise<Review> {
+    const client = await this.pool.connect();
 
-    return this.reviewRepository.save(review);
+    try {
+      await client.query('BEGIN');
+
+      const remainingCredits = await this.organizationsRepository.consumeCredit(
+        dto.organizationId,
+        client,
+      );
+
+      if (remainingCredits === undefined) {
+        throw new BadRequestException('Organization has no available credits');
+      }
+
+      const review: Review = {
+        ...dto,
+        id: randomUUID(),
+        status: 'pending',
+      };
+
+      const savedReview = await this.reviewRepository.save(review, client);
+
+      await client.query('COMMIT');
+
+      return savedReview;
+    } catch (error) {
+      await client.query('ROLLBACK');
+
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   findAll(): Promise<Review[]> {
