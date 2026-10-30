@@ -13,8 +13,13 @@ import {
   type ReviewRepository,
 } from './repositories/review-repository.interface.js';
 import { OrganizationsRepository } from '../organizations/organizations.repository.js';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 import { DATABASE_POOL } from '../database/database.constants.js';
+import {
+  ANALYSIS_RUN_REPOSITORY,
+  type AnalysisRunRepository,
+} from '../analysis-runs/repositories/analysis-run-repository.interface.js';
+import type { NewAnalysisRun } from '../analysis-runs/types/analysis-run.type.js';
 
 @Injectable()
 export class ReviewsService {
@@ -26,6 +31,9 @@ export class ReviewsService {
 
     @Inject(DATABASE_POOL)
     private readonly pool: Pool,
+
+    @Inject(ANALYSIS_RUN_REPOSITORY)
+    private readonly analysisRunRepository: AnalysisRunRepository,
   ) {}
 
   async create(dto: CreateReviewDto): Promise<Review> {
@@ -50,6 +58,14 @@ export class ReviewsService {
       };
 
       const savedReview = await this.reviewRepository.save(review, client);
+
+      const analysisRun: NewAnalysisRun = {
+        id: randomUUID(),
+        reviewId: savedReview.id,
+        status: 'pending',
+      };
+
+      await this.analysisRunRepository.save(analysisRun, client);
 
       await client.query('COMMIT');
 

@@ -6,9 +6,10 @@ import { REVIEW_REPOSITORY } from './repositories/review-repository.interface.js
 import { DatabaseModule } from '../database/database.module.js';
 import { PostgresReviewRepository } from './repositories/postgres-review.repository.js';
 import { OrganizationsModule } from '../organizations/organizations.module.js';
+import { AnalysisRunsModule } from '../analysis-runs/analysis-runs.module.js';
 
 @Module({
-  imports: [DatabaseModule, OrganizationsModule],
+  imports: [DatabaseModule, OrganizationsModule, AnalysisRunsModule],
   controllers: [ReviewsController],
   providers: [
     ReviewsService,
