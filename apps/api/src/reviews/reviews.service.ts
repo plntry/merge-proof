@@ -20,6 +20,11 @@ import {
   type AnalysisRunRepository,
 } from '../analysis-runs/repositories/analysis-run-repository.interface.js';
 import type { NewAnalysisRun } from '../analysis-runs/types/analysis-run.type.js';
+import {
+  OUTBOX_REPOSITORY,
+  type OutboxRepository,
+} from '../outbox/repositories/outbox.repository.interface.js';
+import type { NewOutboxEvent } from '../outbox/types/outbox-event.type.js';
 
 @Injectable()
 export class ReviewsService {
@@ -34,6 +39,9 @@ export class ReviewsService {
 
     @Inject(ANALYSIS_RUN_REPOSITORY)
     private readonly analysisRunRepository: AnalysisRunRepository,
+
+    @Inject(OUTBOX_REPOSITORY)
+    private readonly outboxRepository: OutboxRepository,
   ) {}
 
   async create(dto: CreateReviewDto): Promise<Review> {
@@ -65,7 +73,22 @@ export class ReviewsService {
         status: 'pending',
       };
 
-      await this.analysisRunRepository.save(analysisRun, client);
+      const savedAnalysisRun = await this.analysisRunRepository.save(
+        analysisRun,
+        client,
+      );
+
+      const outboxEvent: NewOutboxEvent = {
+        id: randomUUID(),
+        eventType: 'analysis.requested',
+        aggregateId: savedAnalysisRun.id,
+        payload: {
+          analysisRunId: savedAnalysisRun.id,
+        },
+        status: 'pending',
+      };
+
+      await this.outboxRepository.save(outboxEvent, client);
 
       await client.query('COMMIT');
 

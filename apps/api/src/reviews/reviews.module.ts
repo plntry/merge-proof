@@ -7,9 +7,15 @@ import { DatabaseModule } from '../database/database.module.js';
 import { PostgresReviewRepository } from './repositories/postgres-review.repository.js';
 import { OrganizationsModule } from '../organizations/organizations.module.js';
 import { AnalysisRunsModule } from '../analysis-runs/analysis-runs.module.js';
+import { OutboxModule } from '../outbox/outbox.module.js';
 
 @Module({
-  imports: [DatabaseModule, OrganizationsModule, AnalysisRunsModule],
+  imports: [
+    DatabaseModule,
+    OrganizationsModule,
+    AnalysisRunsModule,
+    OutboxModule,
+  ],
   controllers: [ReviewsController],
   providers: [
     ReviewsService,
