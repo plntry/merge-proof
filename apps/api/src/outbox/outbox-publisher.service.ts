@@ -1,12 +1,15 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   OUTBOX_REPOSITORY,
   type OutboxRepository,
 } from './repositories/outbox.repository.interface.js';
 import { AnalysisQueueService } from '../analysis-runs/analysis-queue.service.js';
+import { Cron } from '@nestjs/schedule';
 
 @Injectable()
 export class OutboxPublisherService {
+  private readonly logger = new Logger(OutboxPublisherService.name);
+
   constructor(
     @Inject(OUTBOX_REPOSITORY)
     private readonly outboxRepository: OutboxRepository,
@@ -14,6 +17,7 @@ export class OutboxPublisherService {
     private readonly analysisQueueService: AnalysisQueueService,
   ) {}
 
+  @Cron('*/5 * * * * *', { waitForCompletion: true })
   async publishPending(limit = 10): Promise<void> {
     const events = await this.outboxRepository.findPending(limit);
 
@@ -27,6 +31,8 @@ export class OutboxPublisherService {
       );
 
       await this.outboxRepository.markPublished(event.id);
+
+      this.logger.log(`Published outbox event ${event.id}`);
     }
   }
 }

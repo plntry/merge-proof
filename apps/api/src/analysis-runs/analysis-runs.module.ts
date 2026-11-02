@@ -5,6 +5,7 @@ import { PostgresAnalysisRunRepository } from './repositories/postgres-analysis-
 import { BullModule } from '@nestjs/bullmq';
 import { ANALYSIS_QUEUE } from './analysis-runs.constants.js';
 import { AnalysisQueueService } from './analysis-queue.service.js';
+import { AnalysisProcessor } from './analysis.processor.js';
 
 @Module({
   imports: [DatabaseModule, BullModule.registerQueue({ name: ANALYSIS_QUEUE })],
@@ -14,6 +15,7 @@ import { AnalysisQueueService } from './analysis-queue.service.js';
       useClass: PostgresAnalysisRunRepository,
     },
     AnalysisQueueService,
+    AnalysisProcessor,
   ],
   exports: [ANALYSIS_RUN_REPOSITORY, AnalysisQueueService],
 })
