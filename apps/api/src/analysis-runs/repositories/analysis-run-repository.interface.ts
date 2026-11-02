@@ -11,7 +11,10 @@ export interface AnalysisRunRepository {
 
   findById(id: string): Promise<AnalysisRun | undefined>;
 
-  markRunning(id: string): Promise<AnalysisRun | undefined>;
+  markRunning(
+    id: string,
+    expectedAttemptCount: number,
+  ): Promise<AnalysisRun | undefined>;
 
   markCompleted(id: string): Promise<AnalysisRun | undefined>;
 

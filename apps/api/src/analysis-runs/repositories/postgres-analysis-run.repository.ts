@@ -79,17 +79,22 @@ export class PostgresAnalysisRunRepository implements AnalysisRunRepository {
   }
 
   // updates
-  async markRunning(id: string): Promise<AnalysisRun | undefined> {
+  async markRunning(
+    id: string,
+    expectedAttemptCount: number,
+  ): Promise<AnalysisRun | undefined> {
     const result = await this.pool.query<AnalysisRunRow>(
       `UPDATE analysis_runs
         SET
           status = 'running',
           attempt_count = attempt_count + 1,
-          started_at = NOW(),
+          started_at = COALESCE(started_at, NOW()),
           error_message = NULL
         WHERE id = $1
+        AND attempt_count = $2
+        AND status IN ('pending', 'running')
         RETURNING *;`,
-      [id],
+      [id, expectedAttemptCount],
     );
 
     const row = result.rows[0];

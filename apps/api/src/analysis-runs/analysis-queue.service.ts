@@ -25,6 +25,11 @@ export class AnalysisQueueService {
       },
       {
         jobId: `analysis-${analysisRunId}`,
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 1000,
+        },
       },
     );
   }

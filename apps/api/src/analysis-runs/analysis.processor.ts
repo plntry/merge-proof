@@ -33,11 +33,33 @@ export class AnalysisProcessor extends WorkerHost {
       throw new Error(`Analysis run ${job.data.analysisRunId} not found`);
     }
 
-    await this.analysisRunRepository.markRunning(analysisRun.id);
+    const startedRun = await this.analysisRunRepository.markRunning(
+      analysisRun.id,
+      job.attemptsMade,
+    );
 
-    // fake analysis (TODO: add AI orchestrator instead)
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    if (!startedRun) {
+      return;
+    }
 
-    await this.analysisRunRepository.markCompleted(analysisRun.id);
+    try {
+      await this.analysisRunRepository.markCompleted(analysisRun.id);
+    } catch (error) {
+      const normalizedError =
+        error instanceof Error ? error : new Error(String(error));
+
+      const maxAttempts = job.opts.attempts ?? 1;
+
+      const isLastAttempt = job.attemptsMade + 1 >= maxAttempts;
+
+      if (isLastAttempt) {
+        await this.analysisRunRepository.markFailed(
+          startedRun.id,
+          normalizedError.message,
+        );
+      }
+
+      throw normalizedError;
+    }
   }
 }
