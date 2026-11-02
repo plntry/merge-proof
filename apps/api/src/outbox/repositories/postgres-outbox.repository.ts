@@ -65,4 +65,37 @@ export class PostgresOutboxRepository implements OutboxRepository {
 
     return this.mapRowToOutboxEvent(row);
   }
+
+  async findPending(limit: number): Promise<OutboxEvent[]> {
+    const result = await this.pool.query<OutboxEventRow>(
+      `SELECT *
+        FROM outbox_events
+        WHERE status = 'pending'
+        ORDER BY created_at ASC
+        LIMIT $1;`,
+      [limit],
+    );
+
+    return result.rows.map((row) => this.mapRowToOutboxEvent(row));
+  }
+
+  async markPublished(id: string): Promise<OutboxEvent | undefined> {
+    const result = await this.pool.query<OutboxEventRow>(
+      `UPDATE outbox_events
+      SET
+        status = 'published',
+        published_at = NOW()
+      WHERE id = $1
+      RETURNING *;`,
+      [id],
+    );
+
+    const row = result.rows[0];
+
+    if (!row) {
+      return undefined;
+    }
+
+    return this.mapRowToOutboxEvent(row);
+  }
 }

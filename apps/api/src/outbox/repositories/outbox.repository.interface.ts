@@ -8,4 +8,8 @@ export const OUTBOX_REPOSITORY = Symbol('OUTBOX_REPOSITORY');
 
 export interface OutboxRepository {
   save(event: NewOutboxEvent, client?: PoolClient): Promise<OutboxEvent>;
+
+  findPending(limit: number): Promise<OutboxEvent[]>;
+
+  markPublished(id: string): Promise<OutboxEvent | undefined>;
 }

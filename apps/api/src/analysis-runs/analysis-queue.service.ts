@@ -18,8 +18,14 @@ export class AnalysisQueueService {
   ) {}
 
   async enqueueAnalysis(analysisRunId: string): Promise<void> {
-    await this.analysisQueue.add(ANALYZE_REVIEW_JOB, {
-      analysisRunId,
-    });
+    await this.analysisQueue.add(
+      ANALYZE_REVIEW_JOB,
+      {
+        analysisRunId,
+      },
+      {
+        jobId: `analysis-${analysisRunId}`,
+      },
+    );
   }
 }
