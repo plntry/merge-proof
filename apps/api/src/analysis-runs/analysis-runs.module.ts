@@ -10,6 +10,9 @@ import { AiModule } from '../ai/ai.module.js';
 import { RequirementsAgent } from './agents/requirements-agent.service.js';
 import { AGENT_RUN_REPOSITORY } from './agents/repositories/agent-run.repository.interface.js';
 import { PostgresAgentRunRepository } from './agents/repositories/postgres-agent-run.repository.js';
+import { FINDING_REPOSITORY } from './findings/repositories/finding-repository.interface.js';
+import { PostgresFindingRepository } from './findings/repositories/postgres-finding.repository.js';
+import { FindingProjectionService } from './findings/finding-projection.service.js';
 
 @Module({
   imports: [
@@ -26,9 +29,14 @@ import { PostgresAgentRunRepository } from './agents/repositories/postgres-agent
       provide: AGENT_RUN_REPOSITORY,
       useClass: PostgresAgentRunRepository,
     },
+    {
+      provide: FINDING_REPOSITORY,
+      useClass: PostgresFindingRepository,
+    },
     AnalysisQueueService,
     AnalysisProcessor,
     RequirementsAgent,
+    FindingProjectionService,
   ],
   exports: [ANALYSIS_RUN_REPOSITORY, AnalysisQueueService],
 })
