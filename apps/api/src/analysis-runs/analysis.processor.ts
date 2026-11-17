@@ -10,12 +10,15 @@ import {
   ANALYSIS_RUN_REPOSITORY,
   type AnalysisRunRepository,
 } from './repositories/analysis-run-repository.interface.js';
+import { RequirementsAgent } from './agents/requirements-agent.service.js';
 
 @Processor(ANALYSIS_QUEUE)
 export class AnalysisProcessor extends WorkerHost {
   constructor(
     @Inject(ANALYSIS_RUN_REPOSITORY)
     private readonly analysisRunRepository: AnalysisRunRepository,
+
+    private readonly requirementsAgent: RequirementsAgent,
   ) {
     super();
   }
@@ -43,6 +46,15 @@ export class AnalysisProcessor extends WorkerHost {
     }
 
     try {
+      const result = await this.requirementsAgent.analyze(`
+Feature request:
+Users should only be able to create a review when their organization has available credits.
+
+Implementation:
+The API creates a review without checking organization credits.`);
+
+      console.log('Requirements analysis result:', result);
+
       await this.analysisRunRepository.markCompleted(analysisRun.id);
     } catch (error) {
       const normalizedError =
