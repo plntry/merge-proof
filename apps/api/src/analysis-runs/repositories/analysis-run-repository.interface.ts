@@ -18,6 +18,11 @@ export interface AnalysisRunRepository {
 
   markCompleted(id: string): Promise<AnalysisRun | undefined>;
 
+  markNeedsReview(
+    id: string,
+    errorMessage: string,
+  ): Promise<AnalysisRun | undefined>;
+
   markFailed(
     id: string,
     errorMessage: string,

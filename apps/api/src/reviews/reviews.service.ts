@@ -60,8 +60,10 @@ export class ReviewsService {
       }
 
       const review: Review = {
-        ...dto,
         id: randomUUID(),
+        organizationId: dto.organizationId,
+        repository: dto.repository,
+        pullRequestNumber: dto.pullRequestNumber,
         status: 'pending',
       };
 

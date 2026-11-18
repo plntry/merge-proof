@@ -127,6 +127,30 @@ export class PostgresAnalysisRunRepository implements AnalysisRunRepository {
     return this.mapRowToAnalysisRun(row);
   }
 
+  async markNeedsReview(
+    id: string,
+    errorMessage: string,
+  ): Promise<AnalysisRun | undefined> {
+    const result = await this.pool.query<AnalysisRunRow>(
+      `UPDATE analysis_runs
+        SET
+          status = 'needs_review',
+          completed_at = NOW(),
+          error_message = $2
+        WHERE id = $1
+        RETURNING *;`,
+      [id, errorMessage],
+    );
+
+    const row = result.rows[0];
+
+    if (!row) {
+      return undefined;
+    }
+
+    return this.mapRowToAnalysisRun(row);
+  }
+
   async markFailed(
     id: string,
     errorMessage: string,

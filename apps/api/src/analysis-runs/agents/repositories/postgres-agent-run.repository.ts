@@ -5,9 +5,9 @@ import { DATABASE_POOL } from '../../../database/database.constants.js';
 import type {
   AgentRun,
   AgentRunStatus,
-  AgentType,
   NewAgentRun,
 } from '../agent-run.types.js';
+import type { AgentType } from '../analysis-agent.types.js';
 import { AgentRunRepository } from './agent-run.repository.interface.js';
 
 type AgentRunRow = {
@@ -16,7 +16,7 @@ type AgentRunRow = {
   agent_type: AgentType;
   status: AgentRunStatus;
   model: string;
-  output: unknown | null;
+  output: unknown;
   error_message: string | null;
   created_at: Date;
   started_at: Date | null;
@@ -45,7 +45,10 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
     };
   }
 
-  async save(run: NewAgentRun, client?: PoolClient): Promise<AgentRun> {
+  async findOrCreate(
+    run: NewAgentRun,
+    client?: PoolClient,
+  ): Promise<AgentRun> {
     const db = client ?? this.pool;
 
     const result = await db.query<AgentRunRow>(
@@ -57,6 +60,8 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
         model
       )
       VALUES ($1, $2, $3, $4, $5)
+      ON CONFLICT (analysis_run_id, agent_type)
+      DO UPDATE SET model = agent_runs.model
       RETURNING *;`,
       [run.id, run.analysisRunId, run.agentType, run.status, run.model],
     );
@@ -66,7 +71,7 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
 
   async findByAnalysisRunAndType(
     analysisRunId: string,
-    agentType: string,
+    agentType: AgentType,
   ): Promise<AgentRun | undefined> {
     const result = await this.pool.query<AgentRunRow>(
       `SELECT *
@@ -91,8 +96,10 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
        SET
          status = 'running',
          started_at = COALESCE(started_at, NOW()),
+         completed_at = NULL,
          error_message = NULL
        WHERE id = $1
+         AND status IN ('pending', 'failed')
        RETURNING *;`,
       [id],
     );
@@ -118,6 +125,7 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
          completed_at = NOW(),
          error_message = NULL
        WHERE id = $1
+         AND status = 'running'
        RETURNING *;`,
       [id, output],
     );
@@ -142,6 +150,7 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
          completed_at = NOW(),
          error_message = $2
        WHERE id = $1
+         AND status = 'running'
        RETURNING *;`,
       [id, errorMessage],
     );

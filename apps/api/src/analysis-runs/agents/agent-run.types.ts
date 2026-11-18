@@ -1,3 +1,5 @@
+import type { AgentType } from './analysis-agent.types.js';
+
 export const AGENT_RUN_STATUSES = [
   'pending',
   'running',
@@ -6,10 +8,6 @@ export const AGENT_RUN_STATUSES = [
 ] as const;
 
 export type AgentRunStatus = (typeof AGENT_RUN_STATUSES)[number];
-
-export const AGENT_TYPES = ['requirements'] as const;
-
-export type AgentType = (typeof AGENT_TYPES)[number];
 
 export type NewAgentRun = {
   id: string;
@@ -20,7 +18,7 @@ export type NewAgentRun = {
 };
 
 export type AgentRun = NewAgentRun & {
-  output: unknown | null;
+  output: unknown;
   errorMessage: string | null;
   createdAt: Date;
   startedAt: Date | null;

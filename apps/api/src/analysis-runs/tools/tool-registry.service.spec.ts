@@ -6,6 +6,7 @@ import { TOOL_LIMITS } from './tool.constants.js';
 describe('ToolRegistry', () => {
   const context = {
     agentRunId: 'agent-run-id',
+    agentType: 'requirements' as const,
     repository: 'merge-proof',
     pullRequestNumber: 42,
   };
@@ -16,6 +17,7 @@ describe('ToolRegistry', () => {
   let getFileContent: ReturnType<typeof vi.fn>;
   let markCompleted: ReturnType<typeof vi.fn>;
   let markFailed: ReturnType<typeof vi.fn>;
+  let saveAudit: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     getPrMetadata = vi.fn().mockResolvedValue({
@@ -38,8 +40,9 @@ describe('ToolRegistry', () => {
     };
     markCompleted = vi.fn().mockResolvedValue({});
     markFailed = vi.fn().mockResolvedValue({});
+    saveAudit = vi.fn().mockResolvedValue({});
     auditRepository = {
-      save: vi.fn().mockResolvedValue({}),
+      save: saveAudit,
       markRunning: vi.fn().mockResolvedValue({}),
       markCompleted,
       markFailed,
@@ -60,6 +63,9 @@ describe('ToolRegistry', () => {
     });
     expect(markCompleted).toHaveBeenCalledOnce();
     expect(markFailed).not.toHaveBeenCalled();
+    expect(saveAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ agentRunId: 'agent-run-id' }),
+    );
   });
 
   it('fails unknown tools safely and persists the failure', async () => {
@@ -72,6 +78,25 @@ describe('ToolRegistry', () => {
         message: 'Tool readEnvironment is not registered.',
       },
     });
+    expect(markFailed).toHaveBeenCalledOnce();
+  });
+
+  it('denies and audits tools outside the agent allow-list', async () => {
+    const result = await registry.execute(
+      { ...context, agentType: 'architecture' },
+      'getPRMetadata',
+      { repository: 'merge-proof', pullRequestNumber: 42 },
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        code: 'tool_not_allowed',
+        message:
+          'Tool getPRMetadata is not allowed for the architecture agent.',
+      },
+    });
+    expect(getPrMetadata).not.toHaveBeenCalled();
     expect(markFailed).toHaveBeenCalledOnce();
   });
 

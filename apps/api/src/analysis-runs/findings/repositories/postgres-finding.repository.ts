@@ -1,10 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { Pool, PoolClient } from 'pg';
+import type { Pool } from 'pg';
 
 import { DATABASE_POOL } from '../../../database/database.constants.js';
 import type { Finding, NewFinding } from '../finding.types.js';
 import type { FindingRepository } from './finding-repository.interface.js';
-import type { FindingSeverity } from '../../agents/requirements-agent.types.js';
+import type { FindingSeverity } from '../../agents/analysis-agent.types.js';
 
 type FindingRow = {
   id: string;

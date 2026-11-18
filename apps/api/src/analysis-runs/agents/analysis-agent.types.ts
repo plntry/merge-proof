@@ -1,3 +1,12 @@
+export const AGENT_TYPES = [
+  'requirements',
+  'security',
+  'architecture',
+  'tests',
+] as const;
+
+export type AgentType = (typeof AGENT_TYPES)[number];
+
 export const FINDING_SEVERITIES = [
   'low',
   'medium',
@@ -7,18 +16,19 @@ export const FINDING_SEVERITIES = [
 
 export type FindingSeverity = (typeof FINDING_SEVERITIES)[number];
 
-export type RequirementFinding = {
+export type AgentFinding = {
   title: string;
   description: string;
   severity: FindingSeverity;
   confidence: number;
 };
 
-export type RequirementsAnalysisResult = {
-  findings: RequirementFinding[];
+export type AgentAnalysisResult = {
+  findings: AgentFinding[];
 };
 
-export type RequirementsAnalysisInput = {
+export type AgentExecutionContext = {
+  analysisRunId: string;
   agentRunId: string;
   repository: string;
   pullRequestNumber: number;

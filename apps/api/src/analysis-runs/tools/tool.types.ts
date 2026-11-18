@@ -5,6 +5,7 @@ import type {
   SearchRepositoryInput,
 } from './tool.schemas.js';
 import type { ToolErrorCode } from './tool.errors.js';
+import type { AgentType } from '../agents/analysis-agent.types.js';
 
 export const TOOL_NAMES = [
   'getPRMetadata',
@@ -59,6 +60,7 @@ export type ToolOutputByName = {
 
 export type ToolExecutionContext = {
   agentRunId: string;
+  agentType: AgentType;
   repository: string;
   pullRequestNumber: number;
 };

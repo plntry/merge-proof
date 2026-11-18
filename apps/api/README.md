@@ -26,13 +26,35 @@
 MergeProof is a NestJS service that analyzes pull requests and persists
 structured, auditable merge-readiness findings.
 
-## Repository analysis tools
+## Multi-agent analysis
 
-The requirements agent can inspect a review through four allow-listed tools:
-`getPRMetadata`, `getChangedFiles`, `getFileContent`, and `searchRepository`.
-The model never receives filesystem, shell, database, environment, or arbitrary
-HTTP access. Tool arguments are validated with Zod, dispatched by a deterministic
-registry, scoped to the review being analyzed, and recorded in `tool_calls`.
+```text
+AnalysisProcessor
+        ↓
+AnalysisOrchestrator
+        ↓
+┌──────────────┬──────────┬──────────────┬─────────┐
+Requirements   Security   Architecture   Tests
+└──────────────┴──────────┴──────────────┴─────────┘
+        ↓
+AgentRuns + ToolCalls
+        ↓
+Findings
+```
+
+The requirements agent compares product intent with implementation, the security
+agent evaluates concrete trust-boundary regressions, the architecture agent checks
+meaningful system-boundary and durability risks, and the test agent identifies
+specific unverified changed behavior. They share one Responses API tool-calling
+runner and one validated finding schema, but each has its own evidence-focused
+prompt.
+
+All agents may use `getChangedFiles`, `getFileContent`, and `searchRepository`.
+Requirements, security, and tests may also use `getPRMetadata`; architecture may
+not. The runner exposes only allowed tools, and `ToolRegistry` independently
+enforces the permission before deterministic execution. The model never receives
+filesystem, shell, database, environment, or arbitrary HTTP access. Calls are
+scoped to the review and recorded in `tool_calls` under the calling agent run.
 
 Day 3 uses a local `RepositorySource` fixture for `merge-proof` pull request 42.
 A GitHub-backed source can replace that provider without changing the agent or
@@ -41,11 +63,19 @@ registry contracts.
 Repository data sent to the model is bounded: searches accept 200 characters
 and return at most 20 results with 500-character snippets; changed-file lists
 return at most 100 entries; file content is capped at 20,000 characters; and a
-serialized tool result cannot exceed 50,000 characters. The agent stops after
+serialized tool result cannot exceed 50,000 characters. Each agent stops after
 five tool-call response rounds, and each tool execution has a 10-second limit.
 
+Agents execute concurrently and persist independent `agent_runs`. Completed runs
+are never sent to OpenAI again; retries validate their stored output and rebuild
+their normalized findings. Failed agents can retry without erasing successful
+agents. Full success completes the analysis. Final-attempt partial success becomes
+`needs_review`, while final-attempt total failure becomes `failed`.
+
 Apply SQL migrations in numeric order before running the worker. Migration 011
-creates the `tool_calls` audit table.
+creates the `tool_calls` audit table. Day 4 requires no migration because
+`agent_type` is unconstrained text and agent-run uniqueness already uses
+`(analysis_run_id, agent_type)`.
 
 ## Project setup
 

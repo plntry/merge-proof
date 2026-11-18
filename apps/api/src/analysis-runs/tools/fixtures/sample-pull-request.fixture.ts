@@ -5,13 +5,19 @@ export const SAMPLE_PR_METADATA: PrMetadata = {
   pullRequestNumber: 42,
   title: 'Add organization credit validation',
   description:
-    'Prevent reviews from being created when an organization has no credits.',
+    'Prevent reviews when an organization has no credits. Credits must be consumed only for successfully created reviews, and callers may spend credits only for organizations they can access.',
   author: 'mergeproof-dev',
   baseBranch: 'main',
   headBranch: 'feature/organization-credit-validation',
 };
 
 export const SAMPLE_CHANGED_FILES: ChangedFile[] = [
+  {
+    path: 'src/reviews/reviews.controller.ts',
+    status: 'modified',
+    additions: 6,
+    deletions: 1,
+  },
   {
     path: 'src/reviews/reviews.service.ts',
     status: 'modified',
@@ -33,6 +39,11 @@ export const SAMPLE_CHANGED_FILES: ChangedFile[] = [
 ];
 
 export const SAMPLE_REPOSITORY_FILES: Readonly<Record<string, string>> = {
+  'src/reviews/reviews.controller.ts': `export class ReviewsController {
+  create(dto: CreateReviewDto): Promise<Review> {
+    return this.reviewsService.create(dto);
+  }
+}`,
   'src/reviews/reviews.service.ts': `export class ReviewsService {
   async create(input: CreateReviewInput): Promise<Review> {
     const remainingCredits = await this.organizationsRepository.consumeCredit(

@@ -1,6 +1,7 @@
 export const TOOL_ERROR_CODES = [
   'invalid_arguments',
   'unknown_tool',
+  'tool_not_allowed',
   'scope_mismatch',
   'repository_not_found',
   'pull_request_not_found',

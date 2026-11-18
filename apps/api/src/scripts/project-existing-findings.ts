@@ -64,7 +64,7 @@ async function main() {
       throw new Error('Agent run has no output');
     }
 
-    await findingProjectionService.projectRequirementsOutput(
+    await findingProjectionService.projectAgentOutput(
       analysisRunId,
       agentRun.id,
       agentRun.output,

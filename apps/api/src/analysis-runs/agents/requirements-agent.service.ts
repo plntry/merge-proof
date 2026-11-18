@@ -1,113 +1,44 @@
-import { Inject, Injectable } from '@nestjs/common';
-import type OpenAI from 'openai';
-import { ConfigService } from '@nestjs/config';
-import { zodTextFormat } from 'openai/helpers/zod';
+import { Injectable } from '@nestjs/common';
 
-import { OPENAI_CLIENT } from '../../ai/ai.constants.js';
-import { requirementsAnalysisResultSchema } from './requirements-agent.schema.js';
+import type { AnalysisAgent } from './analysis-agent.interface.js';
 import type {
-  RequirementsAnalysisInput,
-  RequirementsAnalysisResult,
-} from './requirements-agent.types.js';
-import { ToolRegistry } from '../tools/tool-registry.service.js';
-import { REQUIREMENTS_AGENT_TOOLS } from '../tools/openai-tool-definitions.js';
-import { TOOL_LIMITS } from '../tools/tool.constants.js';
+  AgentAnalysisResult,
+  AgentExecutionContext,
+} from './analysis-agent.types.js';
+import { AGENT_ALLOWED_TOOLS } from './agent-tool-permissions.js';
+import { ToolCallingAgentRunner } from './tool-calling-agent-runner.service.js';
+
+const REQUIREMENTS_PROMPT = `
+You are MergeProof's requirements analysis agent.
+
+Compare the pull request's stated product behavior with its implementation. Inspect
+the PR metadata, changed files, relevant code, validations, and tests. Report only
+missing or incomplete requirements, contradictions between intent and code, and
+important requirement edge cases introduced by this change.
+
+Ignore generic security, architecture, style, and test-volume advice unless it is
+necessary to explain a concrete requirements mismatch. Every finding must cite
+specific repository evidence in its description. Do not invent missing context or
+infer an issue without evidence. Return no findings when the implementation satisfies
+the supported requirements.
+
+Severity describes user or product impact: low is limited, medium is meaningful,
+high blocks important behavior, and critical causes severe or systemic harm.
+Confidence is evidence certainty from 0 to 1, not severity. Return the required
+structured findings object only.
+`.trim();
 
 @Injectable()
-export class RequirementsAgent {
-  constructor(
-    @Inject(OPENAI_CLIENT)
-    private readonly openai: OpenAI,
+export class RequirementsAgent implements AnalysisAgent {
+  readonly type = 'requirements' as const;
 
-    private readonly configService: ConfigService,
+  constructor(private readonly runner: ToolCallingAgentRunner) {}
 
-    private readonly toolRegistry: ToolRegistry,
-  ) {}
-
-  async analyze(
-    input: RequirementsAnalysisInput,
-  ): Promise<RequirementsAnalysisResult> {
-    const model = this.configService.getOrThrow<string>('OPENAI_MODEL');
-    const instructions = `
-You are a requirements analysis agent.
-
-Analyze the pull request for requirement-related problems. Use only the provided
-repository tools, and only for the repository and pull request under review.
-Before returning findings, inspect the pull request metadata and changed-file list,
-then inspect relevant changed files or repository references as needed.
-
-Tool errors are controlled data. Recover when possible and do not invent unavailable
-information. Return only findings supported by tool evidence. Confidence must be
-between 0 and 1.
-    `.trim();
-    const text = {
-      format: zodTextFormat(
-        requirementsAnalysisResultSchema,
-        'requirements_analysis',
-      ),
-    } as const;
-
-    let response = await this.openai.responses.parse({
-      model,
-      instructions,
-      input: `Analyze repository ${input.repository}, pull request #${input.pullRequestNumber}.`,
-      tools: REQUIREMENTS_AGENT_TOOLS,
-      tool_choice: 'required',
-      text,
+  run(context: AgentExecutionContext): Promise<AgentAnalysisResult> {
+    return this.runner.run(context, {
+      agentType: this.type,
+      instructions: REQUIREMENTS_PROMPT,
+      allowedTools: AGENT_ALLOWED_TOOLS[this.type],
     });
-    let toolCallIterations = 0;
-
-    while (true) {
-      const toolCalls = response.output.filter(
-        (item) => item.type === 'function_call',
-      );
-
-      if (toolCalls.length === 0) {
-        if (!response.output_parsed) {
-          throw new Error(
-            `Requirements agent returned no parsed output. Response status: ${response.status}`,
-          );
-        }
-
-        return requirementsAnalysisResultSchema.parse(response.output_parsed);
-      }
-
-      if (toolCallIterations >= TOOL_LIMITS.maxToolCallIterations) {
-        throw new Error(
-          `Requirements agent exceeded ${TOOL_LIMITS.maxToolCallIterations} tool-call iterations.`,
-        );
-      }
-
-      toolCallIterations += 1;
-      const toolOutputs: Array<{
-        type: 'function_call_output';
-        call_id: string;
-        output: string;
-      }> = [];
-
-      for (const toolCall of toolCalls) {
-        const result = await this.toolRegistry.execute(
-          input,
-          toolCall.name,
-          toolCall.arguments,
-        );
-
-        toolOutputs.push({
-          type: 'function_call_output',
-          call_id: toolCall.call_id,
-          output: JSON.stringify(result),
-        });
-      }
-
-      response = await this.openai.responses.parse({
-        model,
-        instructions,
-        previous_response_id: response.id,
-        input: toolOutputs,
-        tools: REQUIREMENTS_AGENT_TOOLS,
-        tool_choice: 'auto',
-        text,
-      });
-    }
   }
 }

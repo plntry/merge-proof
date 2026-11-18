@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { DATABASE_POOL } from './database.constants.js';
 import { ConfigService } from '@nestjs/config';
 import { Pool } from 'pg';
-import { ReviewsModule } from '../reviews/reviews.module.js';
 
 @Module({
   providers: [

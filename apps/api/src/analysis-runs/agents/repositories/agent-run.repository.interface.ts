@@ -1,14 +1,15 @@
 import type { PoolClient } from 'pg';
 import type { AgentRun, NewAgentRun } from '../agent-run.types.js';
+import type { AgentType } from '../analysis-agent.types.js';
 
 export const AGENT_RUN_REPOSITORY = Symbol('AGENT_RUN_REPOSITORY');
 
 export interface AgentRunRepository {
-  save(run: NewAgentRun, client?: PoolClient): Promise<AgentRun>;
+  findOrCreate(run: NewAgentRun, client?: PoolClient): Promise<AgentRun>;
 
   findByAnalysisRunAndType(
     analysisRunId: string,
-    agentType: string,
+    agentType: AgentType,
   ): Promise<AgentRun | undefined>;
 
   markRunning(id: string): Promise<AgentRun | undefined>;

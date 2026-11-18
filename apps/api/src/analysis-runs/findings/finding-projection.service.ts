@@ -6,7 +6,7 @@ import {
   type FindingRepository,
 } from './repositories/finding-repository.interface.js';
 
-import { requirementsAnalysisResultSchema } from '../agents/requirements-agent.schema.js';
+import { agentAnalysisResultSchema } from '../agents/analysis-agent.schema.js';
 
 @Injectable()
 export class FindingProjectionService {
@@ -15,12 +15,12 @@ export class FindingProjectionService {
     private readonly findingRepository: FindingRepository,
   ) {}
 
-  async projectRequirementsOutput(
+  async projectAgentOutput(
     analysisRunId: string,
     agentRunId: string,
     output: unknown,
-  ): Promise<void> {
-    const parsed = requirementsAnalysisResultSchema.parse(output);
+  ): Promise<number> {
+    const parsed = agentAnalysisResultSchema.parse(output);
 
     const findings = parsed.findings.map((finding) => ({
       id: randomUUID(),
@@ -33,5 +33,7 @@ export class FindingProjectionService {
     }));
 
     await this.findingRepository.replaceForAgentRun(agentRunId, findings);
+
+    return findings.length;
   }
 }

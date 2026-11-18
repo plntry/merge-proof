@@ -28,6 +28,7 @@ import {
   type ToolExecutionResult,
   type ToolName,
 } from './tool.types.js';
+import { isToolAllowedForAgent } from '../agents/agent-tool-permissions.js';
 
 type ToolDefinition = {
   schema: ZodType;
@@ -74,6 +75,13 @@ export class ToolRegistry {
         throw new ToolExecutionError(
           'unknown_tool',
           `Tool ${toolName} is not registered.`,
+        );
+      }
+
+      if (!isToolAllowedForAgent(context.agentType, toolName)) {
+        throw new ToolExecutionError(
+          'tool_not_allowed',
+          `Tool ${toolName} is not allowed for the ${context.agentType} agent.`,
         );
       }
 

@@ -1,4 +1,4 @@
-import type { FindingSeverity } from '../agents/requirements-agent.types.js';
+import type { FindingSeverity } from '../agents/analysis-agent.types.js';
 
 export type NewFinding = {
   id: string;
