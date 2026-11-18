@@ -27,6 +27,10 @@ import type { AgentRun } from './agents/agent-run.types.js';
 import { RequirementsAgent } from './agents/requirements-agent.service.js';
 
 import { FindingProjectionService } from './findings/finding-projection.service.js';
+import {
+  ANALYSIS_CONTEXT_REPOSITORY,
+  type AnalysisContextRepository,
+} from './repositories/analysis-context-repository.interface.js';
 
 @Processor(ANALYSIS_QUEUE)
 export class AnalysisProcessor extends WorkerHost {
@@ -36,6 +40,9 @@ export class AnalysisProcessor extends WorkerHost {
 
     @Inject(AGENT_RUN_REPOSITORY)
     private readonly agentRunRepository: AgentRunRepository,
+
+    @Inject(ANALYSIS_CONTEXT_REPOSITORY)
+    private readonly analysisContextRepository: AnalysisContextRepository,
 
     private readonly requirementsAgent: RequirementsAgent,
 
@@ -130,25 +137,20 @@ export class AnalysisProcessor extends WorkerHost {
         throw new Error(`Agent run ${agentRun.id} could not be started`);
       }
 
-      /*
-       * REAL AI CALL.
-       *
-       * For development we keep the input small and use
-       * the cheapest suitable model from OPENAI_MODEL.
-       *
-       * Later this hardcoded input will be replaced by tools:
-       * - PR metadata
-       * - changed files
-       * - file contents
-       * - repository search
-       */
-      const result = await this.requirementsAgent.analyze(`
-Feature request:
-Users should only be able to create a review when their organization has available credits.
+      const reviewContext =
+        await this.analysisContextRepository.findByAnalysisRunId(startedRun.id);
 
-Implementation:
-The API creates a review without checking organization credits.
-        `);
+      if (!reviewContext) {
+        throw new Error(
+          `Review context for analysis run ${startedRun.id} not found`,
+        );
+      }
+
+      const result = await this.requirementsAgent.analyze({
+        agentRunId: runningAgentRun.id,
+        repository: reviewContext.repository,
+        pullRequestNumber: reviewContext.pullRequestNumber,
+      });
 
       /*
        * First persist the raw structured AI result.

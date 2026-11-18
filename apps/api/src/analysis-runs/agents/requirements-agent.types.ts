@@ -17,3 +17,9 @@ export type RequirementFinding = {
 export type RequirementsAnalysisResult = {
   findings: RequirementFinding[];
 };
+
+export type RequirementsAnalysisInput = {
+  agentRunId: string;
+  repository: string;
+  pullRequestNumber: number;
+};
