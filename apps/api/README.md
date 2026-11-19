@@ -39,7 +39,15 @@ Requirements   Security   Architecture   Tests
         ↓
 AgentRuns + ToolCalls
         ↓
-Findings
+Original Findings
+        ↓
+Human Review
+        ↓
+Effective Findings
+        ↓
+MergeDecisionEngine
+        ↓
+Merge Assessment
 ```
 
 The requirements agent compares product intent with implementation, the security
@@ -72,10 +80,46 @@ their normalized findings. Failed agents can retry without erasing successful
 agents. Full success completes the analysis. Final-attempt partial success becomes
 `needs_review`, while final-attempt total failure becomes `failed`.
 
+## Deterministic merge assessment
+
+The LLM identifies potential issues, but it never calculates merge readiness.
+`MergeDecisionEngine` is pure TypeScript and produces an integer risk score,
+deterministic reason codes, a summary, and one of three decisions:
+
+- `ready`: all required agents completed and no block or review rule applies.
+- `needs_review`: agent coverage is incomplete, a finding needs review, or the
+  risk score is at least 30.
+- `blocked`: a human-confirmed critical finding exists, an unreviewed critical
+  finding has confidence of at least 0.90, or the risk score is at least 70.
+
+Severity weights are low 5, medium 15, high 30, and critical 50. Unreviewed
+findings contribute `weight × confidence`; the total is summed, clamped to
+0–100, and rounded to the nearest integer. Accepted and edited findings use the
+full effective-severity weight. Rejected findings contribute zero. An
+unreviewed high finding with confidence of at least 0.60 requires review.
+
+Human reviewers use `PATCH /findings/:findingId/review` to accept, reject, or
+edit a finding, and `DELETE /findings/:findingId/review` to reset it to
+unreviewed. Every mutation recalculates the assessment transactionally. Read
+the current product state through `GET /analysis-runs/:id/findings` and
+`GET /analysis-runs/:id/assessment`.
+
+Original evidence is immutable and remains distinct from human judgment:
+
+```text
+agent_runs.output   raw AI audit data
+findings            normalized original AI findings
+finding_reviews     human judgment and optional edited content
+merge_assessments   deterministic current product decision
+```
+
+Findings use `(agent_run_id, source_index)` as their stable projection identity.
+Re-projecting a completed agent output reuses existing rows, so finding IDs and
+their human reviews survive retries.
+
 Apply SQL migrations in numeric order before running the worker. Migration 011
-creates the `tool_calls` audit table. Day 4 requires no migration because
-`agent_type` is unconstrained text and agent-run uniqueness already uses
-`(analysis_run_id, agent_type)`.
+creates the `tool_calls` audit table, migration 012 adds stable finding
+positions and human reviews, and migration 013 creates merge assessments.
 
 ## Project setup
 

@@ -3,13 +3,13 @@ import type { FindingRepository } from './repositories/finding-repository.interf
 import { FindingProjectionService } from './finding-projection.service.js';
 
 describe('FindingProjectionService', () => {
-  let replaceForAgentRun: ReturnType<typeof vi.fn>;
+  let preserveForAgentRun: ReturnType<typeof vi.fn>;
   let service: FindingProjectionService;
 
   beforeEach(() => {
-    replaceForAgentRun = vi.fn().mockResolvedValue([]);
+    preserveForAgentRun = vi.fn().mockResolvedValue([]);
     service = new FindingProjectionService({
-      replaceForAgentRun,
+      preserveForAgentRun,
       findByAnalysisRunId: vi.fn(),
     } as unknown as FindingRepository);
   });
@@ -35,12 +35,13 @@ describe('FindingProjectionService', () => {
           output,
         ),
       ).resolves.toBe(1);
-      expect(replaceForAgentRun).toHaveBeenLastCalledWith(
+      expect(preserveForAgentRun).toHaveBeenLastCalledWith(
         `${agentType}-run-id`,
         [
           expect.objectContaining({
             analysisRunId: 'analysis-run-id',
             agentRunId: `${agentType}-run-id`,
+            sourceIndex: 0,
             title: `${agentType} finding`,
           }),
         ],
@@ -48,15 +49,15 @@ describe('FindingProjectionService', () => {
     },
   );
 
-  it('replaces rather than appends when re-projecting', async () => {
+  it('preserves stable source positions when re-projecting', async () => {
     const output = { findings: [] };
 
     await service.projectAgentOutput('analysis-run-id', 'agent-run-id', output);
     await service.projectAgentOutput('analysis-run-id', 'agent-run-id', output);
 
-    expect(replaceForAgentRun).toHaveBeenCalledTimes(2);
-    expect(replaceForAgentRun).toHaveBeenNthCalledWith(1, 'agent-run-id', []);
-    expect(replaceForAgentRun).toHaveBeenNthCalledWith(2, 'agent-run-id', []);
+    expect(preserveForAgentRun).toHaveBeenCalledTimes(2);
+    expect(preserveForAgentRun).toHaveBeenNthCalledWith(1, 'agent-run-id', []);
+    expect(preserveForAgentRun).toHaveBeenNthCalledWith(2, 'agent-run-id', []);
   });
 
   it('rejects invalid AI output before persistence', async () => {
@@ -65,6 +66,6 @@ describe('FindingProjectionService', () => {
         findings: [{ severity: 'impossible' }],
       }),
     ).rejects.toThrow();
-    expect(replaceForAgentRun).not.toHaveBeenCalled();
+    expect(preserveForAgentRun).not.toHaveBeenCalled();
   });
 });

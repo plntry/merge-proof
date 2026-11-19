@@ -56,6 +56,9 @@ describe('AnalysisOrchestrator', () => {
       return failed;
     });
     const repository: AgentRunRepository = {
+      findByAnalysisRunId: vi.fn(async (analysisRunId) =>
+        [...runs.values()].filter((run) => run.analysisRunId === analysisRunId),
+      ),
       findOrCreate: vi.fn(async (input) => {
         const key = `${input.analysisRunId}:${input.agentType}`;
         const existing = runs.get(key);
@@ -118,9 +121,7 @@ describe('AnalysisOrchestrator', () => {
 
   function agent(
     type: AgentType,
-    run: ReturnType<typeof vi.fn> = vi
-      .fn()
-      .mockResolvedValue({ findings: [] }),
+    run: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue({ findings: [] }),
   ): AnalysisAgent {
     return { type, run };
   }
@@ -168,7 +169,9 @@ describe('AnalysisOrchestrator', () => {
     const runMocks = agentTypes.map(() =>
       vi.fn().mockResolvedValue({ findings: [] }),
     );
-    const agents = agentTypes.map((type, index) => agent(type, runMocks[index]));
+    const agents = agentTypes.map((type, index) =>
+      agent(type, runMocks[index]),
+    );
     const seeded = agents.map((item, index) => ({
       ...createRun({
         id: `run-${item.type}`,
@@ -207,7 +210,11 @@ describe('AnalysisOrchestrator', () => {
     const first = await orchestrator.run(context.analysisRunId);
     const second = await orchestrator.run(context.analysisRunId);
 
-    expect(first.completedAgents).toEqual(['requirements', 'security', 'tests']);
+    expect(first.completedAgents).toEqual([
+      'requirements',
+      'security',
+      'tests',
+    ]);
     expect(first.failedAgents).toEqual(['architecture']);
     expect(second.completedAgents).toHaveLength(4);
     expect(runsByType.requirements).toHaveBeenCalledOnce();
@@ -248,7 +255,10 @@ describe('AnalysisOrchestrator', () => {
       }),
       startedAt: new Date(),
     };
-    const { orchestrator, markFailed } = setup([agent('requirements')], [running]);
+    const { orchestrator, markFailed } = setup(
+      [agent('requirements')],
+      [running],
+    );
 
     const result = await orchestrator.run(context.analysisRunId);
 

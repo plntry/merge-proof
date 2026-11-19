@@ -22,17 +22,18 @@ export class FindingProjectionService {
   ): Promise<number> {
     const parsed = agentAnalysisResultSchema.parse(output);
 
-    const findings = parsed.findings.map((finding) => ({
+    const findings = parsed.findings.map((finding, sourceIndex) => ({
       id: randomUUID(),
       analysisRunId,
       agentRunId,
+      sourceIndex,
       title: finding.title,
       description: finding.description,
       severity: finding.severity,
       confidence: finding.confidence,
     }));
 
-    await this.findingRepository.replaceForAgentRun(agentRunId, findings);
+    await this.findingRepository.preserveForAgentRun(agentRunId, findings);
 
     return findings.length;
   }

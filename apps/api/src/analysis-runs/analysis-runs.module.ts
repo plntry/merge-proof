@@ -26,6 +26,17 @@ import { TestAgent } from './agents/test-agent.service.js';
 import { ToolCallingAgentRunner } from './agents/tool-calling-agent-runner.service.js';
 import { ANALYSIS_AGENTS } from './agents/analysis-agent.interface.js';
 import { AnalysisOrchestrator } from './orchestration/analysis-orchestrator.service.js';
+import { FINDING_REVIEW_REPOSITORY } from './findings/reviews/repositories/finding-review-repository.interface.js';
+import { PostgresFindingReviewRepository } from './findings/reviews/repositories/postgres-finding-review.repository.js';
+import { FindingReviewService } from './findings/reviews/finding-review.service.js';
+import { FindingReviewController } from './findings/reviews/finding-review.controller.js';
+import { EffectiveFindingService } from './findings/effective/effective-finding.service.js';
+import { MERGE_ASSESSMENT_REPOSITORY } from './merge-assessment/repositories/merge-assessment-repository.interface.js';
+import { PostgresMergeAssessmentRepository } from './merge-assessment/repositories/postgres-merge-assessment.repository.js';
+import { MergeAssessmentService } from './merge-assessment/merge-assessment.service.js';
+import { MergeDecisionEngine } from './merge-decision/merge-decision-engine.js';
+import { AnalysisResultsService } from './analysis-results.service.js';
+import { AnalysisResultsController } from './analysis-results.controller.js';
 
 @Module({
   imports: [
@@ -33,6 +44,7 @@ import { AnalysisOrchestrator } from './orchestration/analysis-orchestrator.serv
     BullModule.registerQueue({ name: ANALYSIS_QUEUE }),
     AiModule,
   ],
+  controllers: [FindingReviewController, AnalysisResultsController],
   providers: [
     {
       provide: ANALYSIS_RUN_REPOSITORY,
@@ -58,6 +70,14 @@ import { AnalysisOrchestrator } from './orchestration/analysis-orchestrator.serv
       provide: FINDING_REPOSITORY,
       useClass: PostgresFindingRepository,
     },
+    {
+      provide: FINDING_REVIEW_REPOSITORY,
+      useClass: PostgresFindingReviewRepository,
+    },
+    {
+      provide: MERGE_ASSESSMENT_REPOSITORY,
+      useClass: PostgresMergeAssessmentRepository,
+    },
     AnalysisQueueService,
     AnalysisProcessor,
     RequirementsAgent,
@@ -66,12 +86,7 @@ import { AnalysisOrchestrator } from './orchestration/analysis-orchestrator.serv
     TestAgent,
     {
       provide: ANALYSIS_AGENTS,
-      inject: [
-        RequirementsAgent,
-        SecurityAgent,
-        ArchitectureAgent,
-        TestAgent,
-      ],
+      inject: [RequirementsAgent, SecurityAgent, ArchitectureAgent, TestAgent],
       useFactory: (
         requirementsAgent: RequirementsAgent,
         securityAgent: SecurityAgent,
@@ -83,6 +98,11 @@ import { AnalysisOrchestrator } from './orchestration/analysis-orchestrator.serv
     AnalysisOrchestrator,
     ToolRegistry,
     FindingProjectionService,
+    FindingReviewService,
+    EffectiveFindingService,
+    MergeDecisionEngine,
+    MergeAssessmentService,
+    AnalysisResultsService,
   ],
   exports: [ANALYSIS_RUN_REPOSITORY, AnalysisQueueService],
 })

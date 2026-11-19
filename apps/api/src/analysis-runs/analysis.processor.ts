@@ -8,6 +8,7 @@ import {
 } from './analysis-runs.constants.js';
 import type { AnalysisJobData } from './analysis-queue.service.js';
 import { AnalysisOrchestrator } from './orchestration/analysis-orchestrator.service.js';
+import { MergeAssessmentService } from './merge-assessment/merge-assessment.service.js';
 import {
   ANALYSIS_RUN_REPOSITORY,
   type AnalysisRunRepository,
@@ -19,6 +20,7 @@ export class AnalysisProcessor extends WorkerHost {
     @Inject(ANALYSIS_RUN_REPOSITORY)
     private readonly analysisRunRepository: AnalysisRunRepository,
     private readonly analysisOrchestrator: AnalysisOrchestrator,
+    private readonly mergeAssessmentService: MergeAssessmentService,
   ) {
     super();
   }
@@ -52,6 +54,7 @@ export class AnalysisProcessor extends WorkerHost {
       const result = await this.analysisOrchestrator.run(startedRun.id);
 
       if (result.failedAgents.length === 0) {
+        await this.mergeAssessmentService.recalculate(startedRun.id);
         await this.analysisRunRepository.markCompleted(startedRun.id);
         return;
       }
@@ -59,6 +62,7 @@ export class AnalysisProcessor extends WorkerHost {
       const failureMessage = `Agents failed: ${result.failedAgents.join(', ')}`;
 
       if (result.completedAgents.length > 0 && isLastAttempt) {
+        await this.mergeAssessmentService.recalculate(startedRun.id);
         await this.analysisRunRepository.markNeedsReview(
           startedRun.id,
           failureMessage,

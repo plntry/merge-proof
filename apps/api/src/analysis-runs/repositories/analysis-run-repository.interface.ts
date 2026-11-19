@@ -9,7 +9,9 @@ export const ANALYSIS_RUN_REPOSITORY = Symbol('ANALYSIS_RUN_REPOSITORY');
 export interface AnalysisRunRepository {
   save(run: NewAnalysisRun, client?: PoolClient): Promise<AnalysisRun>;
 
-  findById(id: string): Promise<AnalysisRun | undefined>;
+  findById(id: string, client?: PoolClient): Promise<AnalysisRun | undefined>;
+
+  lockById(id: string, client: PoolClient): Promise<AnalysisRun | undefined>;
 
   markRunning(
     id: string,

@@ -12,6 +12,11 @@ export interface AgentRunRepository {
     agentType: AgentType,
   ): Promise<AgentRun | undefined>;
 
+  findByAnalysisRunId(
+    analysisRunId: string,
+    client?: PoolClient,
+  ): Promise<AgentRun[]>;
+
   markRunning(id: string): Promise<AgentRun | undefined>;
 
   markCompleted(id: string, output: unknown): Promise<AgentRun | undefined>;

@@ -61,8 +61,12 @@ export class PostgresAnalysisRunRepository implements AnalysisRunRepository {
     return this.mapRowToAnalysisRun(row);
   }
 
-  async findById(id: string): Promise<AnalysisRun | undefined> {
-    const result = await this.pool.query<AnalysisRunRow>(
+  async findById(
+    id: string,
+    client?: PoolClient,
+  ): Promise<AnalysisRun | undefined> {
+    const db = client ?? this.pool;
+    const result = await db.query<AnalysisRunRow>(
       `SELECT *
       FROM analysis_runs
       WHERE id = $1;`,
@@ -76,6 +80,21 @@ export class PostgresAnalysisRunRepository implements AnalysisRunRepository {
     }
 
     return this.mapRowToAnalysisRun(row);
+  }
+
+  async lockById(
+    id: string,
+    client: PoolClient,
+  ): Promise<AnalysisRun | undefined> {
+    const result = await client.query<AnalysisRunRow>(
+      `SELECT *
+       FROM analysis_runs
+       WHERE id = $1
+       FOR UPDATE;`,
+      [id],
+    );
+    const row = result.rows[0];
+    return row ? this.mapRowToAnalysisRun(row) : undefined;
   }
 
   // updates

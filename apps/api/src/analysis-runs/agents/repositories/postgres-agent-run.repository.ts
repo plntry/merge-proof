@@ -45,10 +45,7 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
     };
   }
 
-  async findOrCreate(
-    run: NewAgentRun,
-    client?: PoolClient,
-  ): Promise<AgentRun> {
+  async findOrCreate(run: NewAgentRun, client?: PoolClient): Promise<AgentRun> {
     const db = client ?? this.pool;
 
     const result = await db.query<AgentRunRow>(
@@ -88,6 +85,21 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
     }
 
     return this.mapRowToAgentRun(row);
+  }
+
+  async findByAnalysisRunId(
+    analysisRunId: string,
+    client?: PoolClient,
+  ): Promise<AgentRun[]> {
+    const db = client ?? this.pool;
+    const result = await db.query<AgentRunRow>(
+      `SELECT *
+       FROM agent_runs
+       WHERE analysis_run_id = $1
+       ORDER BY created_at ASC;`,
+      [analysisRunId],
+    );
+    return result.rows.map((row) => this.mapRowToAgentRun(row));
   }
 
   async markRunning(id: string): Promise<AgentRun | undefined> {

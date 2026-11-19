@@ -22,6 +22,7 @@ describe('AnalysisProcessor', () => {
   let markNeedsReview: ReturnType<typeof vi.fn>;
   let markFailed: ReturnType<typeof vi.fn>;
   let processor: AnalysisProcessor;
+  let recalculate: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     markCompleted = vi.fn().mockResolvedValue({ ...run, status: 'completed' });
@@ -38,9 +39,14 @@ describe('AnalysisProcessor', () => {
       markFailed,
     };
     orchestratorRun = vi.fn();
-    processor = new AnalysisProcessor(repository, {
-      run: orchestratorRun,
-    } as unknown as AnalysisOrchestrator);
+    recalculate = vi.fn().mockResolvedValue(undefined);
+    processor = new AnalysisProcessor(
+      repository,
+      {
+        run: orchestratorRun,
+      } as unknown as AnalysisOrchestrator,
+      { recalculate } as never,
+    );
   });
 
   function job(attemptsMade: number, attempts = 3): Job {
@@ -62,6 +68,7 @@ describe('AnalysisProcessor', () => {
     await processor.process(job(0));
 
     expect(markCompleted).toHaveBeenCalledWith(run.id);
+    expect(recalculate).toHaveBeenCalledWith(run.id);
   });
 
   it('throws a partial failure while retries remain', async () => {
@@ -76,6 +83,7 @@ describe('AnalysisProcessor', () => {
     );
     expect(markNeedsReview).not.toHaveBeenCalled();
     expect(markFailed).not.toHaveBeenCalled();
+    expect(recalculate).not.toHaveBeenCalled();
   });
 
   it('marks final partial success as needs_review', async () => {
@@ -92,6 +100,7 @@ describe('AnalysisProcessor', () => {
       'Agents failed: architecture',
     );
     expect(markFailed).not.toHaveBeenCalled();
+    expect(recalculate).toHaveBeenCalledWith(run.id);
   });
 
   it('marks all-agent failure failed on the final attempt', async () => {
@@ -108,5 +117,6 @@ describe('AnalysisProcessor', () => {
       run.id,
       'Agents failed: requirements, security, architecture, tests',
     );
+    expect(recalculate).not.toHaveBeenCalled();
   });
 });

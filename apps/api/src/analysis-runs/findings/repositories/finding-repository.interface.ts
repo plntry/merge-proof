@@ -1,12 +1,27 @@
-import type { Finding, NewFinding } from '../finding.types.js';
+import type { PoolClient } from 'pg';
+import type {
+  Finding,
+  FindingWithAgentType,
+  NewFinding,
+} from '../finding.types.js';
 
 export const FINDING_REPOSITORY = Symbol('FINDING_REPOSITORY');
 
 export interface FindingRepository {
-  replaceForAgentRun(
+  preserveForAgentRun(
     agentRunId: string,
     findings: NewFinding[],
   ): Promise<Finding[]>;
 
-  findByAnalysisRunId(analysisRunId: string): Promise<Finding[]>;
+  findById(id: string, client?: PoolClient): Promise<Finding | undefined>;
+
+  findByAnalysisRunId(
+    analysisRunId: string,
+    client?: PoolClient,
+  ): Promise<Finding[]>;
+
+  findByAnalysisRunIdWithAgentType(
+    analysisRunId: string,
+    client?: PoolClient,
+  ): Promise<FindingWithAgentType[]>;
 }
