@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { performance } from 'node:perf_hooks';
 
 import { Inject, Injectable } from '@nestjs/common';
 import { z, type ZodType } from 'zod';
@@ -18,10 +19,7 @@ import {
   searchRepositoryInputSchema,
 } from './tool.schemas.js';
 import { TOOL_LIMITS } from './tool.constants.js';
-import {
-  ToolExecutionError,
-  toControlledToolError,
-} from './tool.errors.js';
+import { ToolExecutionError, toControlledToolError } from './tool.errors.js';
 import {
   TOOL_NAMES,
   type ToolExecutionContext,
@@ -29,6 +27,7 @@ import {
   type ToolName,
 } from './tool.types.js';
 import { isToolAllowedForAgent } from '../agents/agent-tool-permissions.js';
+import { TraceRecorder } from '../tracing/trace-recorder.service.js';
 
 type ToolDefinition = {
   schema: ZodType;
@@ -42,6 +41,7 @@ export class ToolRegistry {
     private readonly repositorySource: RepositorySource,
     @Inject(TOOL_CALL_REPOSITORY)
     private readonly toolCallRepository: ToolCallRepository,
+    private readonly traceRecorder: TraceRecorder,
   ) {}
 
   async execute(
@@ -65,6 +65,14 @@ export class ToolRegistry {
     if (!running) {
       throw new Error(`Tool call ${toolCallId} could not be started`);
     }
+    await this.traceRecorder.record({
+      analysisRunId: context.analysisRunId,
+      agentRunId: context.agentRunId,
+      toolCallId,
+      eventType: 'tool.started',
+      metadata: { agentType: context.agentType, toolName },
+    });
+    const startedAt = performance.now();
 
     try {
       if (preparedArguments.parseError) {
@@ -121,6 +129,18 @@ export class ToolRegistry {
         throw new Error(`Tool call ${toolCallId} could not be completed`);
       }
 
+      await this.traceRecorder.record({
+        analysisRunId: context.analysisRunId,
+        agentRunId: context.agentRunId,
+        toolCallId,
+        eventType: 'tool.completed',
+        metadata: {
+          agentType: context.agentType,
+          toolName,
+          durationMs: Math.round(performance.now() - startedAt),
+        },
+      });
+
       return result;
     } catch (error) {
       const controlledError = toControlledToolError(error);
@@ -132,6 +152,19 @@ export class ToolRegistry {
       if (!failed) {
         throw new Error(`Tool call ${toolCallId} could not be failed`);
       }
+
+      await this.traceRecorder.record({
+        analysisRunId: context.analysisRunId,
+        agentRunId: context.agentRunId,
+        toolCallId,
+        eventType: 'tool.failed',
+        metadata: {
+          agentType: context.agentType,
+          toolName,
+          durationMs: Math.round(performance.now() - startedAt),
+          errorType: controlledError.code,
+        },
+      });
 
       return { ok: false, error: controlledError };
     }
@@ -179,10 +212,7 @@ export class ToolRegistry {
     });
 
     try {
-      return await Promise.race([
-        definition.execute(input),
-        timeoutPromise,
-      ]);
+      return await Promise.race([definition.execute(input), timeoutPromise]);
     } finally {
       if (timeout) {
         clearTimeout(timeout);

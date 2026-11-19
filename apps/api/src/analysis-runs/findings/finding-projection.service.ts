@@ -7,12 +7,14 @@ import {
 } from './repositories/finding-repository.interface.js';
 
 import { agentAnalysisResultSchema } from '../agents/analysis-agent.schema.js';
+import { TraceRecorder } from '../tracing/trace-recorder.service.js';
 
 @Injectable()
 export class FindingProjectionService {
   constructor(
     @Inject(FINDING_REPOSITORY)
     private readonly findingRepository: FindingRepository,
+    private readonly traceRecorder: TraceRecorder,
   ) {}
 
   async projectAgentOutput(
@@ -34,6 +36,13 @@ export class FindingProjectionService {
     }));
 
     await this.findingRepository.preserveForAgentRun(agentRunId, findings);
+    await this.traceRecorder.record({
+      analysisRunId,
+      agentRunId,
+      toolCallId: null,
+      eventType: 'findings.projected',
+      metadata: { findingCount: findings.length },
+    });
 
     return findings.length;
   }

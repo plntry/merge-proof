@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "dev:api": "pnpm --filter api start:dev",
-    "dev:web": "pnpm --filter web dev"
+    "dev:web": "pnpm --filter web dev",
+    "eval": "pnpm --filter api eval"
   },
   "keywords": [],
   "author": "",

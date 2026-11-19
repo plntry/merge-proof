@@ -21,6 +21,7 @@ import {
   MERGE_ASSESSMENT_REPOSITORY,
   type MergeAssessmentRepository,
 } from './repositories/merge-assessment-repository.interface.js';
+import { TraceRecorder } from '../tracing/trace-recorder.service.js';
 
 @Injectable()
 export class MergeAssessmentService {
@@ -35,6 +36,7 @@ export class MergeAssessmentService {
     private readonly mergeAssessmentRepository: MergeAssessmentRepository,
     private readonly effectiveFindingService: EffectiveFindingService,
     private readonly engine: MergeDecisionEngine,
+    private readonly traceRecorder: TraceRecorder,
   ) {}
 
   async findByAnalysisRunId(analysisRunId: string): Promise<MergeAssessment> {
@@ -115,7 +117,7 @@ export class MergeAssessmentService {
       agentCoverage,
     });
 
-    return this.mergeAssessmentRepository.upsert(
+    const assessment = await this.mergeAssessmentRepository.upsert(
       {
         id: randomUUID(),
         analysisRunId,
@@ -123,5 +125,19 @@ export class MergeAssessmentService {
       },
       client,
     );
+    await this.traceRecorder.record(
+      {
+        analysisRunId,
+        agentRunId: null,
+        toolCallId: null,
+        eventType: 'assessment.calculated',
+        metadata: {
+          decision: assessment.decision,
+          riskScore: assessment.riskScore,
+        },
+      },
+      client,
+    );
+    return assessment;
   }
 }

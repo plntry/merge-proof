@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { performance } from 'node:perf_hooks';
 
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -22,6 +23,7 @@ import type {
   AgentExecutionSummary,
   AnalysisOrchestrationResult,
 } from './orchestration.types.js';
+import { TraceRecorder } from '../tracing/trace-recorder.service.js';
 
 @Injectable()
 export class AnalysisOrchestrator {
@@ -36,6 +38,7 @@ export class AnalysisOrchestrator {
     private readonly agentRunRepository: AgentRunRepository,
     private readonly findingProjectionService: FindingProjectionService,
     private readonly configService: ConfigService,
+    private readonly traceRecorder: TraceRecorder,
   ) {}
 
   async run(analysisRunId: string): Promise<AnalysisOrchestrationResult> {
@@ -43,7 +46,9 @@ export class AnalysisOrchestrator {
       await this.analysisContextRepository.findByAnalysisRunId(analysisRunId);
 
     if (!context) {
-      throw new Error(`Review context for analysis run ${analysisRunId} not found`);
+      throw new Error(
+        `Review context for analysis run ${analysisRunId} not found`,
+      );
     }
 
     const model = this.configService.getOrThrow<string>('OPENAI_MODEL');
@@ -69,6 +74,7 @@ export class AnalysisOrchestrator {
   ): Promise<AgentExecutionSummary> {
     let agentRun: AgentRun | undefined;
     let claimed = false;
+    let startedAt: number | undefined;
 
     try {
       agentRun = await this.agentRunRepository.findOrCreate({
@@ -88,11 +94,10 @@ export class AnalysisOrchestrator {
       );
 
       if (!runningAgentRun) {
-        const current =
-          await this.agentRunRepository.findByAnalysisRunAndType(
-            context.analysisRunId,
-            agent.type,
-          );
+        const current = await this.agentRunRepository.findByAnalysisRunAndType(
+          context.analysisRunId,
+          agent.type,
+        );
 
         if (current?.status === 'completed') {
           return await this.reuseCompletedRun(current, context.analysisRunId);
@@ -103,7 +108,19 @@ export class AnalysisOrchestrator {
 
       agentRun = runningAgentRun;
       claimed = true;
+      startedAt = performance.now();
       this.logStatus(context.analysisRunId, agentRun, 'running');
+      await this.traceRecorder.record({
+        analysisRunId: context.analysisRunId,
+        agentRunId: agentRun.id,
+        toolCallId: null,
+        eventType: 'agent.started',
+        metadata: {
+          agentType: agent.type,
+          promptVersion: agent.promptVersion,
+          model,
+        },
+      });
 
       const output = await agent.run({
         analysisRunId: context.analysisRunId,
@@ -129,6 +146,18 @@ export class AnalysisOrchestrator {
         );
 
       this.logStatus(context.analysisRunId, agentRun, 'completed');
+      await this.traceRecorder.record({
+        analysisRunId: context.analysisRunId,
+        agentRunId: agentRun.id,
+        toolCallId: null,
+        eventType: 'agent.completed',
+        metadata: {
+          agentType: agent.type,
+          promptVersion: agent.promptVersion,
+          findingCount,
+          durationMs: Math.round(performance.now() - startedAt),
+        },
+      });
       return { agentType: agent.type, status: 'completed', findingCount };
     } catch (error) {
       const normalizedError =
@@ -162,6 +191,22 @@ export class AnalysisOrchestrator {
         error: normalizedError.message,
       });
 
+      await this.traceRecorder.record({
+        analysisRunId: context.analysisRunId,
+        agentRunId: agentRun?.id ?? null,
+        toolCallId: null,
+        eventType: 'agent.failed',
+        metadata: {
+          agentType: agent.type,
+          promptVersion: agent.promptVersion,
+          durationMs:
+            startedAt == null
+              ? null
+              : Math.round(performance.now() - startedAt),
+          errorType: normalizedError.name,
+        },
+      });
+
       return {
         agentType: agent.type,
         status: 'failed',
@@ -186,6 +231,20 @@ export class AnalysisOrchestrator {
     );
 
     this.logStatus(analysisRunId, agentRun, 'reused');
+    const agent = this.agents.find(
+      (candidate) => candidate.type === agentRun.agentType,
+    );
+    await this.traceRecorder.record({
+      analysisRunId,
+      agentRunId: agentRun.id,
+      toolCallId: null,
+      eventType: 'agent.reused',
+      metadata: {
+        agentType: agentRun.agentType,
+        promptVersion: agent?.promptVersion ?? `${agentRun.agentType}-unknown`,
+        findingCount,
+      },
+    });
     return {
       agentType: agentRun.agentType,
       status: 'completed',

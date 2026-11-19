@@ -104,6 +104,7 @@ describe('AnalysisOrchestrator', () => {
       async (_analysisRunId: string, _agentRunId: string, output: unknown) =>
         (output as { findings: unknown[] }).findings.length,
     );
+    const record = vi.fn().mockResolvedValue(undefined);
     const orchestrator = new AnalysisOrchestrator(
       agents,
       {
@@ -114,16 +115,24 @@ describe('AnalysisOrchestrator', () => {
       {
         getOrThrow: vi.fn().mockReturnValue('test-model'),
       } as unknown as ConfigService,
+      { record } as never,
     );
 
-    return { orchestrator, repository, runs, projectAgentOutput, markFailed };
+    return {
+      orchestrator,
+      repository,
+      runs,
+      projectAgentOutput,
+      markFailed,
+      record,
+    };
   }
 
   function agent(
     type: AgentType,
     run: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue({ findings: [] }),
   ): AnalysisAgent {
-    return { type, run };
+    return { type, promptVersion: `${type}-v1`, run };
   }
 
   it('starts all four independent agents concurrently', async () => {
@@ -183,13 +192,16 @@ describe('AnalysisOrchestrator', () => {
       output: { findings: index === 0 ? [] : [{ title: item.type }] },
       completedAt: new Date(),
     }));
-    const { orchestrator, projectAgentOutput } = setup(agents, seeded);
+    const { orchestrator, projectAgentOutput, record } = setup(agents, seeded);
 
     const result = await orchestrator.run(context.analysisRunId);
 
     expect(result.completedAgents).toHaveLength(4);
     expect(runMocks.every((run) => run.mock.calls.length === 0)).toBe(true);
     expect(projectAgentOutput).toHaveBeenCalledTimes(4);
+    expect(
+      record.mock.calls.filter(([entry]) => entry.eventType === 'agent.reused'),
+    ).toHaveLength(4);
   });
 
   it('preserves successes and retries only the failed agent', async () => {

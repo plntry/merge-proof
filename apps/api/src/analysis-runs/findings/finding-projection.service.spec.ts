@@ -8,10 +8,13 @@ describe('FindingProjectionService', () => {
 
   beforeEach(() => {
     preserveForAgentRun = vi.fn().mockResolvedValue([]);
-    service = new FindingProjectionService({
-      preserveForAgentRun,
-      findByAnalysisRunId: vi.fn(),
-    } as unknown as FindingRepository);
+    service = new FindingProjectionService(
+      {
+        preserveForAgentRun,
+        findByAnalysisRunId: vi.fn(),
+      } as unknown as FindingRepository,
+      { record: vi.fn().mockResolvedValue(undefined) } as never,
+    );
   });
 
   it.each<AgentType>(['requirements', 'security', 'architecture', 'tests'])(

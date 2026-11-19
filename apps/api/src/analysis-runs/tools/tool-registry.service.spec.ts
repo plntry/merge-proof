@@ -5,6 +5,7 @@ import { TOOL_LIMITS } from './tool.constants.js';
 
 describe('ToolRegistry', () => {
   const context = {
+    analysisRunId: 'analysis-run-id',
     agentRunId: 'agent-run-id',
     agentType: 'requirements' as const,
     repository: 'merge-proof',
@@ -18,6 +19,7 @@ describe('ToolRegistry', () => {
   let markCompleted: ReturnType<typeof vi.fn>;
   let markFailed: ReturnType<typeof vi.fn>;
   let saveAudit: ReturnType<typeof vi.fn>;
+  let record: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     getPrMetadata = vi.fn().mockResolvedValue({
@@ -47,7 +49,8 @@ describe('ToolRegistry', () => {
       markCompleted,
       markFailed,
     } as unknown as ToolCallRepository;
-    registry = new ToolRegistry(source, auditRepository);
+    record = vi.fn().mockResolvedValue(undefined);
+    registry = new ToolRegistry(source, auditRepository, { record } as never);
   });
 
   it('validates and executes a known tool with the correct arguments', async () => {
@@ -63,6 +66,15 @@ describe('ToolRegistry', () => {
     });
     expect(markCompleted).toHaveBeenCalledOnce();
     expect(markFailed).not.toHaveBeenCalled();
+    const savedId = saveAudit.mock.calls[0][0].id;
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        analysisRunId: 'analysis-run-id',
+        agentRunId: 'agent-run-id',
+        toolCallId: savedId,
+        eventType: 'tool.completed',
+      }),
+    );
     expect(saveAudit).toHaveBeenCalledWith(
       expect.objectContaining({ agentRunId: 'agent-run-id' }),
     );

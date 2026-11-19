@@ -2,7 +2,11 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { Pool } from 'pg';
 
 import { DATABASE_POOL } from '../../../database/database.constants.js';
-import type { NewToolCall, ToolCall, ToolCallStatus } from './tool-call.types.js';
+import type {
+  NewToolCall,
+  ToolCall,
+  ToolCallStatus,
+} from './tool-call.types.js';
 import type { ToolCallRepository } from './tool-call-repository.interface.js';
 
 type ToolCallRow = {
@@ -38,6 +42,17 @@ export class PostgresToolCallRepository implements ToolCallRepository {
       startedAt: row.started_at,
       completedAt: row.completed_at,
     };
+  }
+
+  async findByAgentRunIds(agentRunIds: string[]): Promise<ToolCall[]> {
+    if (agentRunIds.length === 0) return [];
+    const result = await this.pool.query<ToolCallRow>(
+      `SELECT * FROM tool_calls
+       WHERE agent_run_id = ANY($1::uuid[])
+       ORDER BY created_at ASC;`,
+      [agentRunIds],
+    );
+    return result.rows.map((row) => this.mapRow(row));
   }
 
   async save(toolCall: NewToolCall): Promise<ToolCall> {

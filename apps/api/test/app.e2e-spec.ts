@@ -45,6 +45,7 @@ describe('AppController (e2e)', () => {
       tests: randomUUID(),
     };
     const findingId = randomUUID();
+    const toolCallId = randomUUID();
     const rawOutput = {
       findings: [
         {
@@ -86,6 +87,80 @@ describe('AppController (e2e)', () => {
             'completed',
             'deterministic-e2e-fixture',
             agentType === 'security' ? rawOutput : { findings: [] },
+          ],
+        );
+      }
+
+      await pool.query(
+        `INSERT INTO tool_calls (
+           id, agent_run_id, tool_name, arguments, result, status,
+           started_at, completed_at
+         ) VALUES ($1, $2, $3, $4, $5, 'completed', NOW(), NOW());`,
+        [
+          toolCallId,
+          agentRunIds.security,
+          'getChangedFiles',
+          { repository: 'sensitive-internal-value' },
+          { files: ['sensitive-source.ts'] },
+        ],
+      );
+      const traceEvents = [
+        ['analysis.started', null, null, { attempt: 1, maxAttempts: 3 }],
+        [
+          'agent.started',
+          agentRunIds.security,
+          null,
+          { agentType: 'security', promptVersion: 'security-v1' },
+        ],
+        [
+          'model.request.started',
+          agentRunIds.security,
+          null,
+          { requestIndex: 0, model: 'deterministic-e2e-fixture' },
+        ],
+        [
+          'model.request.completed',
+          agentRunIds.security,
+          null,
+          {
+            requestIndex: 0,
+            model: 'deterministic-e2e-fixture',
+            durationMs: 12,
+            inputTokens: 20,
+            outputTokens: 5,
+            totalTokens: 25,
+          },
+        ],
+        [
+          'tool.completed',
+          agentRunIds.security,
+          toolCallId,
+          { agentType: 'security', toolName: 'getChangedFiles', durationMs: 3 },
+        ],
+        [
+          'agent.completed',
+          agentRunIds.security,
+          null,
+          { agentType: 'security', findingCount: 1, durationMs: 20 },
+        ],
+      ] as const;
+      for (const [
+        eventType,
+        agentRunId,
+        eventToolCallId,
+        metadata,
+      ] of traceEvents) {
+        await pool.query(
+          `INSERT INTO trace_events (
+             id, analysis_run_id, agent_run_id, tool_call_id, event_type, metadata
+           ) VALUES ($1, $2, $3, $4, $5, $6);`,
+          [
+            randomUUID(),
+            analysisRunId,
+            agentRunId,
+            eventToolCallId,
+            eventType,
+            metadata,
           ],
         );
       }
@@ -188,7 +263,41 @@ describe('AppController (e2e)', () => {
         [agentRunIds.security],
       );
       expect(agentOutput.rows[0].output).toEqual(rawOutput);
+
+      const trace = await request(app.getHttpServer())
+        .get(`/analysis-runs/${analysisRunId}/trace`)
+        .expect(200);
+      expect(trace.body.summary).toMatchObject({
+        analysisRunId,
+        attempts: 0,
+        totals: {
+          modelCalls: 1,
+          toolCalls: 1,
+          findings: 1,
+          inputTokens: 20,
+          outputTokens: 5,
+          totalTokens: 25,
+          usageComplete: true,
+        },
+      });
+      expect(trace.body.summary.agents).toContainEqual(
+        expect.objectContaining({
+          agentType: 'security',
+          promptVersion: 'security-v1',
+          modelCallCount: 1,
+          toolCallCount: 1,
+          findingCount: 1,
+        }),
+      );
+      const serializedTrace = JSON.stringify(trace.body);
+      expect(serializedTrace).not.toContain('sensitive-internal-value');
+      expect(serializedTrace).not.toContain('sensitive-source.ts');
+      expect(serializedTrace).not.toContain('instructions');
     } finally {
+      await pool.query(`DELETE FROM trace_events WHERE analysis_run_id = $1;`, [
+        analysisRunId,
+      ]);
+      await pool.query(`DELETE FROM tool_calls WHERE id = $1;`, [toolCallId]);
       await pool.query(
         `DELETE FROM merge_assessments WHERE analysis_run_id = $1;`,
         [analysisRunId],
@@ -211,6 +320,11 @@ describe('AppController (e2e)', () => {
       ]);
     }
   });
+
+  it('returns 404 for an unknown analysis trace', () =>
+    request(app.getHttpServer())
+      .get(`/analysis-runs/${randomUUID()}/trace`)
+      .expect(404));
 
   afterAll(async () => {
     await app.close();

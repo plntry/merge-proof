@@ -59,6 +59,7 @@ export type ToolOutputByName = {
 };
 
 export type ToolExecutionContext = {
+  analysisRunId: string;
   agentRunId: string;
   agentType: AgentType;
   repository: string;

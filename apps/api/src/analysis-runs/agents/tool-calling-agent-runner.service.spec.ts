@@ -17,6 +17,7 @@ describe('ToolCallingAgentRunner', () => {
   };
   const config = {
     agentType: 'requirements' as const,
+    promptVersion: 'requirements-v1',
     instructions: 'Requirements-specific instructions',
     allowedTools: [
       'getPRMetadata',
@@ -27,17 +28,20 @@ describe('ToolCallingAgentRunner', () => {
   };
   let parse: ReturnType<typeof vi.fn>;
   let executeTool: ReturnType<typeof vi.fn>;
+  let record: ReturnType<typeof vi.fn>;
   let runner: ToolCallingAgentRunner;
 
   beforeEach(() => {
     parse = vi.fn();
     executeTool = vi.fn().mockResolvedValue({ ok: true, data: [] });
+    record = vi.fn().mockResolvedValue(undefined);
     runner = new ToolCallingAgentRunner(
       { responses: { parse } } as unknown as OpenAI,
       {
         getOrThrow: vi.fn().mockReturnValue('test-model'),
       } as unknown as ConfigService,
       { execute: executeTool } as unknown as ToolRegistry,
+      { record } as never,
     );
   });
 
@@ -72,6 +76,7 @@ describe('ToolCallingAgentRunner', () => {
     expect(executeTool).toHaveBeenNthCalledWith(
       1,
       {
+        analysisRunId: 'analysis-run-id',
         agentRunId: 'agent-run-id',
         agentType: 'requirements',
         repository: 'merge-proof',
@@ -84,6 +89,42 @@ describe('ToolCallingAgentRunner', () => {
       2,
       expect.objectContaining({ previous_response_id: 'response-1' }),
     );
+    expect(
+      record.mock.calls.filter(
+        ([entry]) => entry.eventType === 'model.request.started',
+      ),
+    ).toHaveLength(3);
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'model.request.completed',
+        metadata: expect.objectContaining({
+          promptVersion: 'requirements-v1',
+          inputTokens: null,
+          totalTokens: null,
+        }),
+      }),
+    );
+  });
+
+  it('captures actual token usage supplied by the response', async () => {
+    parse.mockResolvedValueOnce({
+      ...fakeFinalResponse(),
+      usage: { input_tokens: 12, output_tokens: 3, total_tokens: 15 },
+    });
+
+    await runner.run(context, config);
+
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'model.request.completed',
+        metadata: expect.objectContaining({
+          inputTokens: 12,
+          outputTokens: 3,
+          totalTokens: 15,
+          durationMs: expect.any(Number),
+        }),
+      }),
+    );
   });
 
   it('exposes only the configured tools', async () => {
@@ -91,12 +132,9 @@ describe('ToolCallingAgentRunner', () => {
 
     await runner.run(context, {
       agentType: 'architecture',
+      promptVersion: 'architecture-v1',
       instructions: 'Architecture-specific instructions',
-      allowedTools: [
-        'getChangedFiles',
-        'getFileContent',
-        'searchRepository',
-      ],
+      allowedTools: ['getChangedFiles', 'getFileContent', 'searchRepository'],
     });
 
     const request = parse.mock.calls[0][0] as {
@@ -112,10 +150,15 @@ describe('ToolCallingAgentRunner', () => {
   it('stops after five tool-call iterations', async () => {
     for (let index = 0; index < 6; index += 1) {
       parse.mockResolvedValueOnce(
-        fakeToolResponse(`response-${index}`, `call-${index}`, 'getPRMetadata', {
-          repository: 'merge-proof',
-          pullRequestNumber: 42,
-        }),
+        fakeToolResponse(
+          `response-${index}`,
+          `call-${index}`,
+          'getPRMetadata',
+          {
+            repository: 'merge-proof',
+            pullRequestNumber: 42,
+          },
+        ),
       );
     }
 

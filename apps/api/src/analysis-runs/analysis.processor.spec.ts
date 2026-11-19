@@ -23,6 +23,7 @@ describe('AnalysisProcessor', () => {
   let markFailed: ReturnType<typeof vi.fn>;
   let processor: AnalysisProcessor;
   let recalculate: ReturnType<typeof vi.fn>;
+  let record: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     markCompleted = vi.fn().mockResolvedValue({ ...run, status: 'completed' });
@@ -40,12 +41,14 @@ describe('AnalysisProcessor', () => {
     };
     orchestratorRun = vi.fn();
     recalculate = vi.fn().mockResolvedValue(undefined);
+    record = vi.fn().mockResolvedValue(undefined);
     processor = new AnalysisProcessor(
       repository,
       {
         run: orchestratorRun,
       } as unknown as AnalysisOrchestrator,
       { recalculate } as never,
+      { record } as never,
     );
   });
 
@@ -69,6 +72,12 @@ describe('AnalysisProcessor', () => {
 
     expect(markCompleted).toHaveBeenCalledWith(run.id);
     expect(recalculate).toHaveBeenCalledWith(run.id);
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'analysis.completed',
+        metadata: expect.objectContaining({ status: 'completed', attempt: 1 }),
+      }),
+    );
   });
 
   it('throws a partial failure while retries remain', async () => {
@@ -84,6 +93,12 @@ describe('AnalysisProcessor', () => {
     expect(markNeedsReview).not.toHaveBeenCalled();
     expect(markFailed).not.toHaveBeenCalled();
     expect(recalculate).not.toHaveBeenCalled();
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'analysis.failed',
+        metadata: expect.objectContaining({ willRetry: true }),
+      }),
+    );
   });
 
   it('marks final partial success as needs_review', async () => {

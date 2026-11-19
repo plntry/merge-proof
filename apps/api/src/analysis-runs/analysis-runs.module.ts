@@ -37,6 +37,11 @@ import { MergeAssessmentService } from './merge-assessment/merge-assessment.serv
 import { MergeDecisionEngine } from './merge-decision/merge-decision-engine.js';
 import { AnalysisResultsService } from './analysis-results.service.js';
 import { AnalysisResultsController } from './analysis-results.controller.js';
+import { TRACE_EVENT_REPOSITORY } from './tracing/repositories/trace-event-repository.interface.js';
+import { PostgresTraceEventRepository } from './tracing/repositories/postgres-trace-event.repository.js';
+import { TraceRecorder } from './tracing/trace-recorder.service.js';
+import { AnalysisTraceService } from './tracing/analysis-trace.service.js';
+import { AnalysisTraceController } from './tracing/analysis-trace.controller.js';
 
 @Module({
   imports: [
@@ -44,7 +49,11 @@ import { AnalysisResultsController } from './analysis-results.controller.js';
     BullModule.registerQueue({ name: ANALYSIS_QUEUE }),
     AiModule,
   ],
-  controllers: [FindingReviewController, AnalysisResultsController],
+  controllers: [
+    FindingReviewController,
+    AnalysisResultsController,
+    AnalysisTraceController,
+  ],
   providers: [
     {
       provide: ANALYSIS_RUN_REPOSITORY,
@@ -78,6 +87,10 @@ import { AnalysisResultsController } from './analysis-results.controller.js';
       provide: MERGE_ASSESSMENT_REPOSITORY,
       useClass: PostgresMergeAssessmentRepository,
     },
+    {
+      provide: TRACE_EVENT_REPOSITORY,
+      useClass: PostgresTraceEventRepository,
+    },
     AnalysisQueueService,
     AnalysisProcessor,
     RequirementsAgent,
@@ -103,6 +116,8 @@ import { AnalysisResultsController } from './analysis-results.controller.js';
     MergeDecisionEngine,
     MergeAssessmentService,
     AnalysisResultsService,
+    TraceRecorder,
+    AnalysisTraceService,
   ],
   exports: [ANALYSIS_RUN_REPOSITORY, AnalysisQueueService],
 })

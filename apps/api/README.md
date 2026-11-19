@@ -121,6 +121,49 @@ Apply SQL migrations in numeric order before running the worker. Migration 011
 creates the `tool_calls` audit table, migration 012 adds stable finding
 positions and human reviews, and migration 013 creates merge assessments.
 
+## Tracing and metrics
+
+Each analysis uses its existing `analysisRunId` as the logical trace ID. Events
+correlate work through `analysisRunId`, `agentRunId`, and, for tools,
+`toolCallId`. Migration 014 creates the compact `trace_events` table.
+
+Meaningful workflow boundaries are traced for analyses, agents, individual model
+requests, tools, finding projection, and assessment calculation. The trace stores
+status, duration, model, prompt version, counts, controlled error types, and actual
+token usage when the Responses API supplies it. Missing usage remains `null` and
+the summary reports `usageComplete: false`; token counts are never estimated.
+
+Current prompt versions are `requirements-v1`, `security-v1`,
+`architecture-v1`, and `tests-v1`. Full prompts, source files, tool arguments,
+tool results, secrets, and stack traces are not copied into trace metadata.
+Tracing is best effort: a trace-write failure is logged but does not replace the
+primary workflow result.
+
+Read a sanitized aggregate and chronological event list with:
+
+```http
+GET /analysis-runs/:id/trace
+```
+
+The summary includes analysis and agent duration, retries, executed versus reused
+agents, failures, model/tool/finding counts, severity counts, and token usage.
+
+## Deterministic evals
+
+The default eval suite uses repository fixtures, a scripted fake Responses client,
+the real specialized agents, ToolCallingAgentRunner, ToolRegistry, finding schema,
+and MergeDecisionEngine. It makes no paid API calls and covers requirements,
+security, architecture, tests, clean-PR false positives, expected-issue false
+negatives, tool usage, human review, and all three merge decisions.
+
+```bash
+pnpm eval
+```
+
+The command prints a readable six-case report and exits non-zero when an assertion
+regresses. Its internal result is machine-readable and records the suite version,
+prompt versions, fake provider mode, model identifier, and timestamp.
+
 ## Project setup
 
 ```bash

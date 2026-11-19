@@ -31,12 +31,14 @@ Return the required structured findings object only.
 @Injectable()
 export class SecurityAgent implements AnalysisAgent {
   readonly type = 'security' as const;
+  readonly promptVersion = 'security-v1';
 
   constructor(private readonly runner: ToolCallingAgentRunner) {}
 
   run(context: AgentExecutionContext): Promise<AgentAnalysisResult> {
     return this.runner.run(context, {
       agentType: this.type,
+      promptVersion: this.promptVersion,
       instructions: SECURITY_PROMPT,
       allowedTools: AGENT_ALLOWED_TOOLS[this.type],
     });

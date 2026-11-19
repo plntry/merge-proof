@@ -31,12 +31,14 @@ structured findings object only.
 @Injectable()
 export class RequirementsAgent implements AnalysisAgent {
   readonly type = 'requirements' as const;
+  readonly promptVersion = 'requirements-v1';
 
   constructor(private readonly runner: ToolCallingAgentRunner) {}
 
   run(context: AgentExecutionContext): Promise<AgentAnalysisResult> {
     return this.runner.run(context, {
       agentType: this.type,
+      promptVersion: this.promptVersion,
       instructions: REQUIREMENTS_PROMPT,
       allowedTools: AGENT_ALLOWED_TOOLS[this.type],
     });

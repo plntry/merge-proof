@@ -32,12 +32,14 @@ to 1, not severity. Return the required structured findings object only.
 @Injectable()
 export class ArchitectureAgent implements AnalysisAgent {
   readonly type = 'architecture' as const;
+  readonly promptVersion = 'architecture-v1';
 
   constructor(private readonly runner: ToolCallingAgentRunner) {}
 
   run(context: AgentExecutionContext): Promise<AgentAnalysisResult> {
     return this.runner.run(context, {
       agentType: this.type,
+      promptVersion: this.promptVersion,
       instructions: ARCHITECTURE_PROMPT,
       allowedTools: AGENT_ALLOWED_TOOLS[this.type],
     });

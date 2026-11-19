@@ -25,6 +25,7 @@ describe('specialized agents', () => {
 
     const configs = run.mock.calls.map((call) => call[1] as {
       agentType: string;
+      promptVersion: string;
       instructions: string;
       allowedTools: readonly string[];
     });
@@ -36,6 +37,12 @@ describe('specialized agents', () => {
     ]);
     expect(new Set(configs.map((config) => config.instructions)).size).toBe(4);
     expect(configs[2].allowedTools).not.toContain('getPRMetadata');
+    expect(configs.map((config) => config.promptVersion)).toEqual([
+      'requirements-v1',
+      'security-v1',
+      'architecture-v1',
+      'tests-v1',
+    ]);
     expect(configs.every((config) => config.instructions.includes('evidence'))).toBe(
       true,
     );
