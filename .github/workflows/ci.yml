@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: mergeproof
+          POSTGRES_USER: mergeproof
+          POSTGRES_PASSWORD: mergeproof
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U mergeproof -d mergeproof"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+    env:
+      DATABASE_URL: postgresql://mergeproof:mergeproof@localhost:5432/mergeproof
+      REDIS_URL: redis://localhost:6379
+      OPENAI_API_KEY: ci-placeholder-not-a-real-key
+      OPENAI_MODEL: gpt-4.1-mini
+      PORT: 3001
+      WEB_ORIGIN: http://localhost:3000
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+      NEXT_PUBLIC_DEMO_ORGANIZATION_ID: 00000000-0000-4000-8000-000000000001
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.11.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm migrate
+      - run: pnpm seed:demo
+      - run: pnpm test
+      - run: pnpm test:web
+      - run: pnpm test:e2e
+      - run: pnpm eval
+      - run: pnpm lint
+      - run: pnpm build
+      - run: git diff --check

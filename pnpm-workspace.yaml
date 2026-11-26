@@ -2,5 +2,5 @@ packages:
   - 'apps/*'
   - 'packages/*'
 allowBuilds:
-  msgpackr-extract: set this to true or false
+  msgpackr-extract: false
   unrs-resolver: true

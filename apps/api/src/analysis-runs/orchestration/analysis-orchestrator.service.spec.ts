@@ -1,5 +1,6 @@
 import type { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 
 import type { AnalysisAgent } from '../agents/analysis-agent.interface.js';
 import type { AgentType } from '../agents/analysis-agent.types.js';
@@ -18,6 +19,8 @@ function createRun(input: NewAgentRun): AgentRun {
     createdAt: new Date(),
     startedAt: null,
     completedAt: null,
+    leaseToken: null,
+    leaseExpiresAt: null,
   };
 }
 
@@ -43,14 +46,16 @@ describe('AnalysisOrchestrator', () => {
     const runs = new Map<string, AgentRun>(
       seededRuns.map((run) => [`${run.analysisRunId}:${run.agentType}`, run]),
     );
-    const markFailed = vi.fn(async (id: string, errorMessage: string) => {
+    const markFailed = vi.fn(async (id: string, leaseToken: string, errorMessage: string) => {
       const entry = [...runs.entries()].find(([, run]) => run.id === id);
-      if (!entry || entry[1].status !== 'running') return undefined;
+      if (!entry || entry[1].status !== 'running' || entry[1].leaseToken !== leaseToken) return undefined;
       const failed: AgentRun = {
         ...entry[1],
         status: 'failed',
         errorMessage,
         completedAt: new Date(),
+        leaseToken: null,
+        leaseExpiresAt: null,
       };
       runs.set(entry[0], failed);
       return failed;
@@ -81,19 +86,24 @@ describe('AnalysisOrchestrator', () => {
           startedAt: entry[1].startedAt ?? new Date(),
           completedAt: null,
           errorMessage: null,
+          leaseToken: randomUUID(),
+          leaseExpiresAt: new Date(Date.now() + 60_000),
         };
         runs.set(entry[0], running);
         return running;
       }),
-      markCompleted: vi.fn(async (id, output) => {
+      renewLease: vi.fn(async () => true),
+      markCompleted: vi.fn(async (id, leaseToken, output) => {
         const entry = [...runs.entries()].find(([, run]) => run.id === id);
-        if (!entry || entry[1].status !== 'running') return undefined;
+        if (!entry || entry[1].status !== 'running' || entry[1].leaseToken !== leaseToken) return undefined;
         const completed: AgentRun = {
           ...entry[1],
           status: 'completed',
           output,
           completedAt: new Date(),
           errorMessage: null,
+          leaseToken: null,
+          leaseExpiresAt: null,
         };
         runs.set(entry[0], completed);
         return completed;

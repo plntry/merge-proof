@@ -19,7 +19,17 @@ export interface AgentRunRepository {
 
   markRunning(id: string): Promise<AgentRun | undefined>;
 
-  markCompleted(id: string, output: unknown): Promise<AgentRun | undefined>;
+  renewLease(id: string, leaseToken: string): Promise<boolean>;
 
-  markFailed(id: string, errorMessage: string): Promise<AgentRun | undefined>;
+  markCompleted(
+    id: string,
+    leaseToken: string,
+    output: unknown,
+  ): Promise<AgentRun | undefined>;
+
+  markFailed(
+    id: string,
+    leaseToken: string,
+    errorMessage: string,
+  ): Promise<AgentRun | undefined>;
 }

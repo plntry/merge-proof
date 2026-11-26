@@ -75,6 +75,7 @@ export class AnalysisOrchestrator {
     let agentRun: AgentRun | undefined;
     let claimed = false;
     let startedAt: number | undefined;
+    let leaseHeartbeat: NodeJS.Timeout | undefined;
 
     try {
       agentRun = await this.agentRunRepository.findOrCreate({
@@ -107,8 +108,31 @@ export class AnalysisOrchestrator {
       }
 
       agentRun = runningAgentRun;
+      const leaseToken = agentRun.leaseToken;
+      if (!leaseToken) throw new Error(`Agent run ${agentRun.id} has no active lease`);
       claimed = true;
       startedAt = performance.now();
+      leaseHeartbeat = setInterval(() => {
+        void this.agentRunRepository.renewLease(agentRun!.id, leaseToken).then((renewed) => {
+          if (!renewed) {
+            this.logger.warn({
+              analysisRunId: context.analysisRunId,
+              agentRunId: agentRun!.id,
+              agentType: agent.type,
+              status: 'lease_lost',
+            });
+          }
+        }).catch((heartbeatError: unknown) => {
+          this.logger.warn({
+            analysisRunId: context.analysisRunId,
+            agentRunId: agentRun!.id,
+            agentType: agent.type,
+            status: 'lease_renewal_failed',
+            error: heartbeatError instanceof Error ? heartbeatError.message : String(heartbeatError),
+          });
+        });
+      }, 20_000);
+      leaseHeartbeat.unref();
       this.logStatus(context.analysisRunId, agentRun, 'running');
       await this.traceRecorder.record({
         analysisRunId: context.analysisRunId,
@@ -130,6 +154,7 @@ export class AnalysisOrchestrator {
       });
       const completedAgentRun = await this.agentRunRepository.markCompleted(
         agentRun.id,
+        leaseToken,
         output,
       );
 
@@ -167,6 +192,7 @@ export class AnalysisOrchestrator {
         try {
           await this.agentRunRepository.markFailed(
             agentRun.id,
+            agentRun.leaseToken ?? '',
             normalizedError.message,
           );
         } catch (persistenceError) {
@@ -213,6 +239,8 @@ export class AnalysisOrchestrator {
         findingCount: 0,
         errorMessage: normalizedError.message,
       };
+    } finally {
+      if (leaseHeartbeat) clearInterval(leaseHeartbeat);
     }
   }
 

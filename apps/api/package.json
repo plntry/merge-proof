@@ -20,7 +20,10 @@
     "test:cov": "vitest run --coverage",
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
-    "eval": "tsc -p tsconfig.eval.json && vitest run --config ./vitest.config.eval.ts"
+    "eval": "tsc -p tsconfig.eval.json && vitest run --config ./vitest.config.eval.ts",
+    "migrate": "node scripts/migrate.mjs",
+    "seed:demo": "node scripts/seed-demo.mjs",
+    "dev:fake-responses": "node scripts/fake-responses-server.mjs"
   },
   "dependencies": {
     "@nestjs/bullmq": "^12.0.0",

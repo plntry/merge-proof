@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 
 import { DATABASE_POOL } from '../../../database/database.constants.js';
@@ -21,6 +22,8 @@ type AgentRunRow = {
   created_at: Date;
   started_at: Date | null;
   completed_at: Date | null;
+  lease_token: string | null;
+  lease_expires_at: Date | null;
 };
 
 @Injectable()
@@ -42,6 +45,8 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
       createdAt: row.created_at,
       startedAt: row.started_at,
       completedAt: row.completed_at,
+      leaseToken: row.lease_token,
+      leaseExpiresAt: row.lease_expires_at,
     };
   }
 
@@ -103,17 +108,23 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
   }
 
   async markRunning(id: string): Promise<AgentRun | undefined> {
+    const leaseToken = randomUUID();
     const result = await this.pool.query<AgentRunRow>(
       `UPDATE agent_runs
        SET
          status = 'running',
          started_at = COALESCE(started_at, NOW()),
          completed_at = NULL,
-         error_message = NULL
+         error_message = NULL,
+         lease_token = $2,
+         lease_expires_at = NOW() + INTERVAL '60 seconds'
        WHERE id = $1
-         AND status IN ('pending', 'failed')
+         AND (
+           status IN ('pending', 'failed')
+           OR (status = 'running' AND lease_expires_at <= NOW())
+         )
        RETURNING *;`,
-      [id],
+      [id, leaseToken],
     );
 
     const row = result.rows[0];
@@ -125,8 +136,21 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
     return this.mapRowToAgentRun(row);
   }
 
+  async renewLease(id: string, leaseToken: string): Promise<boolean> {
+    const result = await this.pool.query(
+      `UPDATE agent_runs
+       SET lease_expires_at = NOW() + INTERVAL '60 seconds'
+       WHERE id = $1 AND status = 'running'
+         AND lease_token = $2 AND lease_expires_at > NOW()
+       RETURNING id;`,
+      [id, leaseToken],
+    );
+    return result.rowCount === 1;
+  }
+
   async markCompleted(
     id: string,
+    leaseToken: string,
     output: unknown,
   ): Promise<AgentRun | undefined> {
     const result = await this.pool.query<AgentRunRow>(
@@ -135,11 +159,12 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
          status = 'completed',
          output = $2,
          completed_at = NOW(),
-         error_message = NULL
-       WHERE id = $1
-         AND status = 'running'
+         error_message = NULL,
+         lease_token = NULL,
+         lease_expires_at = NULL
+       WHERE id = $1 AND status = 'running' AND lease_token = $3
        RETURNING *;`,
-      [id, output],
+      [id, output, leaseToken],
     );
 
     const row = result.rows[0];
@@ -153,6 +178,7 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
 
   async markFailed(
     id: string,
+    leaseToken: string,
     errorMessage: string,
   ): Promise<AgentRun | undefined> {
     const result = await this.pool.query<AgentRunRow>(
@@ -160,11 +186,12 @@ export class PostgresAgentRunRepository implements AgentRunRepository {
        SET
          status = 'failed',
          completed_at = NOW(),
-         error_message = $2
-       WHERE id = $1
-         AND status = 'running'
+         error_message = $3,
+         lease_token = NULL,
+         lease_expires_at = NULL
+       WHERE id = $1 AND status = 'running' AND lease_token = $2
        RETURNING *;`,
-      [id, errorMessage],
+      [id, leaseToken, errorMessage],
     );
 
     const row = result.rows[0];

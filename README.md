@@ -198,53 +198,71 @@ merge-proof/
 pnpm install
 ```
 
-### 2. Configure the API
+### 2. Start local infrastructure and configure the applications
 
 ```bash
+docker compose up -d
 cp apps/api/.env.example apps/api/.env
+cp apps/web/.env.example apps/web/.env.local
 ```
 
 Required values:
 
 ```dotenv
-DATABASE_URL=postgresql://localhost:5432/mergeproof
-OPENAI_API_KEY=your_api_key
-OPENAI_MODEL=your_responses_api_model
+DATABASE_URL=postgresql://mergeproof:mergeproof@localhost:5432/mergeproof
+OPENAI_API_KEY=your_server_side_api_key
+OPENAI_MODEL=gpt-4.1-mini
 PORT=3001
+WEB_ORIGIN=http://localhost:3000
+REPOSITORY_SOURCE=fixture
 ```
 
-The deterministic unit tests and `pnpm eval` do not require a real OpenAI call.
+Keep the OpenAI key in the API environment. Unit tests and `pnpm eval` do not call
+OpenAI; submitting an analysis from the app does use the configured model.
 
 ### 3. Create and migrate a fresh database
 
 ```bash
-createdb mergeproof
-
-for migration in apps/api/migrations/*.sql; do
-  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"
-done
+pnpm migrate
+pnpm seed:demo
 ```
 
-Migrations are plain SQL and must be applied in numeric order.
+The migration command applies numbered SQL migrations in order and records them
+in `schema_migrations`. It also recognizes databases created by the former manual
+migration instructions. The seed creates the local organization used by the UI.
 
-For local use, create an organization before submitting a review:
-
-```sql
-INSERT INTO organizations (id, name, credits)
-VALUES ('00000000-0000-4000-8000-000000000001', 'Local', 100);
-```
-
-### 4. Start Redis and the API
+### 4. Run the applications
 
 ```bash
-redis-server
 pnpm dev:api
+# in another terminal
+pnpm dev:web
 ```
 
-The API listens on `http://localhost:3001` by default. The current repository source
-is a deterministic fixture for repository `merge-proof`, pull request `42`.
+The product UI creates a review and receives persisted progress snapshots over
+SSE. The fixture repository source is selected by default. `GET /health` checks
+PostgreSQL connectivity.
 
-### 5. Create an analysis
+To use GitHub instead of the fixture, set `REPOSITORY_SOURCE=github` and add a
+server-side `GITHUB_TOKEN` with access to the target repositories. The token is
+never sent to the web app. File reads use the PR head SHA; changed-file retrieval
+is paginated and capped at 100 files, file content at 20,000 characters, and code
+search at 20 bounded snippets. Requests time out after five seconds and GitHub
+errors are converted to controlled tool errors. No GitHub request is made in the
+default fixture mode.
+
+### 5. Checks
+
+```bash
+pnpm test
+pnpm test:e2e
+pnpm test:web
+pnpm eval
+pnpm lint
+pnpm build
+```
+
+### 6. Create an analysis
 
 ```bash
 curl -X POST http://localhost:3001/reviews \
@@ -268,7 +286,9 @@ through the outbox and BullMQ worker.
 | `GET` | `/reviews/:id` | Read a review |
 | `GET` | `/analysis-runs/:id/findings` | Original, reviewed, and effective findings |
 | `GET` | `/analysis-runs/:id/assessment` | Current deterministic merge assessment |
+| `GET` | `/analysis-runs/:id/events` | SSE stream of authoritative analysis snapshots |
 | `GET` | `/analysis-runs/:id/trace` | Sanitized trace summary and events |
+| `GET` | `/health` | PostgreSQL readiness check |
 | `PATCH` | `/findings/:findingId/review` | Accept, reject, or edit a finding |
 | `DELETE` | `/findings/:findingId/review` | Reset a finding to unreviewed |
 
@@ -309,7 +329,14 @@ pnpm --filter web build
 ```
 
 E2E tests require local PostgreSQL and Redis. They seed and clean their own fixture
-rows. Unit tests and evals use deterministic fakes at external boundaries.
+rows. Web API client tests use mocked fetch/EventSource. Unit tests and evals use
+deterministic fakes at external boundaries.
+
+For an end-to-end browser smoke test without contacting OpenAI, run
+`pnpm --filter api dev:fake-responses`, then start the API with
+`OPENAI_BASE_URL=http://127.0.0.1:4010/v1`, a dummy `OPENAI_API_KEY`, and
+`REPOSITORY_SOURCE=fixture`. The fake server binds to loopback and returns fixed
+findings; it has no upstream API connection.
 
 ## Audit model
 
@@ -317,7 +344,7 @@ MergeProof keeps each layer distinct:
 
 ```text
 analysis_runs       durable workflow state
-agent_runs          raw specialist outputs and model identity
+agent_runs          raw specialist outputs, model identity, and fenced leases
 tool_calls          scoped tool audit trail
 findings            immutable normalized AI evidence
 finding_reviews     human judgment
@@ -331,10 +358,9 @@ decisions independently inspectable.
 ## Current limitations
 
 - Repository data currently comes from a deterministic local fixture; a production
-  GitHub provider is not implemented yet.
+  GitHub provider is available by explicit server-side configuration, while the
+  fixture remains the default for tests and local demo.
 - Authentication and reviewer identity are not implemented.
-- The Next.js app is currently a scaffold; the product UI and live updates are not
-  part of the backend milestone.
 - Tracing is database-backed and intentionally does not depend on an external
   observability platform.
 - Eval quality checks are deterministic; there is no LLM-as-judge dependency.

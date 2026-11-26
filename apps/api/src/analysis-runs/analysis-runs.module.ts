@@ -42,6 +42,10 @@ import { PostgresTraceEventRepository } from './tracing/repositories/postgres-tr
 import { TraceRecorder } from './tracing/trace-recorder.service.js';
 import { AnalysisTraceService } from './tracing/analysis-trace.service.js';
 import { AnalysisTraceController } from './tracing/analysis-trace.controller.js';
+import { AnalysisLiveController } from './live/analysis-live.controller.js';
+import { AnalysisLiveService } from './live/analysis-live.service.js';
+import { GitHubRepositorySource } from './tools/github-repository-source.service.js';
+import { ConfigService } from '@nestjs/config';
 
 @Module({
   imports: [
@@ -53,6 +57,7 @@ import { AnalysisTraceController } from './tracing/analysis-trace.controller.js'
     FindingReviewController,
     AnalysisResultsController,
     AnalysisTraceController,
+    AnalysisLiveController,
   ],
   providers: [
     {
@@ -69,7 +74,12 @@ import { AnalysisTraceController } from './tracing/analysis-trace.controller.js'
     },
     {
       provide: REPOSITORY_SOURCE,
-      useClass: MockRepositorySource,
+      inject: [ConfigService, MockRepositorySource, GitHubRepositorySource],
+      useFactory: (
+        config: ConfigService,
+        fixture: MockRepositorySource,
+        github: GitHubRepositorySource,
+      ) => config.get('REPOSITORY_SOURCE') === 'github' ? github : fixture,
     },
     {
       provide: TOOL_CALL_REPOSITORY,
@@ -110,6 +120,7 @@ import { AnalysisTraceController } from './tracing/analysis-trace.controller.js'
     ToolCallingAgentRunner,
     AnalysisOrchestrator,
     ToolRegistry,
+    MockRepositorySource,
     FindingProjectionService,
     FindingReviewService,
     EffectiveFindingService,
@@ -118,6 +129,8 @@ import { AnalysisTraceController } from './tracing/analysis-trace.controller.js'
     AnalysisResultsService,
     TraceRecorder,
     AnalysisTraceService,
+    AnalysisLiveService,
+    GitHubRepositorySource,
   ],
   exports: [ANALYSIS_RUN_REPOSITORY, AnalysisQueueService],
 })

@@ -16,7 +16,10 @@ export const REPOSITORY_SOURCE = Symbol('REPOSITORY_SOURCE');
 export interface RepositorySource {
   getPrMetadata(input: GetPrMetadataInput): Promise<PrMetadata>;
   getChangedFiles(input: GetChangedFilesInput): Promise<ChangedFile[]>;
-  getFileContent(input: GetFileContentInput): Promise<FileContent>;
+  getFileContent(
+    input: GetFileContentInput,
+    pullRequestNumber?: number,
+  ): Promise<FileContent>;
   searchRepository(
     input: SearchRepositoryInput,
   ): Promise<RepositorySearchResult[]>;

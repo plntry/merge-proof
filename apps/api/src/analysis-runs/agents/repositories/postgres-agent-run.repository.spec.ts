@@ -14,6 +14,8 @@ describe('PostgresAgentRunRepository', () => {
     created_at: new Date(),
     started_at: null,
     completed_at: null,
+    lease_token: null,
+    lease_expires_at: null,
   };
   let query: ReturnType<typeof vi.fn>;
   let repository: PostgresAgentRunRepository;
@@ -39,13 +41,21 @@ describe('PostgresAgentRunRepository', () => {
 
   it('guards lifecycle transitions by current status', async () => {
     await repository.markRunning('agent-run-id');
-    await repository.markCompleted('agent-run-id', { findings: [] });
-    await repository.markFailed('agent-run-id', 'failed');
+    await repository.markCompleted('agent-run-id', 'lease-token', { findings: [] });
+    await repository.markFailed('agent-run-id', 'lease-token', 'failed');
 
-    expect(query.mock.calls[0][0]).toContain(
-      "status IN ('pending', 'failed')",
-    );
+    expect(query.mock.calls[0][0]).toContain("status IN ('pending', 'failed')");
+    expect(query.mock.calls[0][0]).toContain('lease_expires_at <= NOW()');
     expect(query.mock.calls[1][0]).toContain("status = 'running'");
+    expect(query.mock.calls[1][0]).toContain('lease_token = $3');
     expect(query.mock.calls[2][0]).toContain("status = 'running'");
+    expect(query.mock.calls[2][0]).toContain('lease_token = $2');
+  });
+
+  it('renews only a healthy, currently owned lease', async () => {
+    query.mockResolvedValueOnce({ rowCount: 1, rows: [{ id: 'agent-run-id' }] });
+    await expect(repository.renewLease('agent-run-id', 'lease-token')).resolves.toBe(true);
+    expect(query.mock.calls.at(-1)?.[0]).toContain('lease_expires_at > NOW()');
+    expect(query.mock.calls.at(-1)?.[0]).toContain('lease_token = $2');
   });
 });

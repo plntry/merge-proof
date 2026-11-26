@@ -9,6 +9,7 @@ import { AppModule } from './../src/app.module.js';
 import { DATABASE_POOL } from '../src/database/database.constants.js';
 import { MergeAssessmentService } from '../src/analysis-runs/merge-assessment/merge-assessment.service.js';
 import { FindingProjectionService } from '../src/analysis-runs/findings/finding-projection.service.js';
+import { AGENT_RUN_REPOSITORY, type AgentRunRepository } from '../src/analysis-runs/agents/repositories/agent-run.repository.interface.js';
 
 describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
@@ -326,7 +327,56 @@ describe('AppController (e2e)', () => {
       .get(`/analysis-runs/${randomUUID()}/trace`)
       .expect(404));
 
+  it('reports database readiness', () =>
+    request(app.getHttpServer()).get('/health').expect(200, { status: 'ok' }));
+
+  it('reclaims an expired agent lease but never steals a healthy lease', async () => {
+    const organizationId = randomUUID();
+    const reviewId = randomUUID();
+    const analysisRunId = randomUUID();
+    const healthyAgentId = randomUUID();
+    const expiredAgentId = randomUUID();
+    const healthyToken = randomUUID();
+    const expiredToken = randomUUID();
+    const repository = app.get<AgentRunRepository>(AGENT_RUN_REPOSITORY);
+
+    try {
+      await pool.query('INSERT INTO organizations (id, name, credits) VALUES ($1, $2, 1)', [organizationId, 'Lease e2e']);
+      await pool.query(
+        `INSERT INTO reviews (id, repository, pull_request_number, status, organization_id)
+         VALUES ($1, 'merge-proof', 8080, 'pending', $2)`,
+        [reviewId, organizationId],
+      );
+      await pool.query('INSERT INTO analysis_runs (id, review_id, status) VALUES ($1, $2, $3)', [analysisRunId, reviewId, 'running']);
+      for (const agent of [
+        { id: healthyAgentId, type: 'requirements', token: healthyToken, expiration: "NOW() + INTERVAL '60 seconds'" },
+        { id: expiredAgentId, type: 'security', token: expiredToken, expiration: "NOW() - INTERVAL '1 second'" },
+      ]) {
+        await pool.query(
+          `INSERT INTO agent_runs (id, analysis_run_id, agent_type, status, model, lease_token, lease_expires_at)
+           VALUES ($1, $2, $3, 'running', 'lease-test', $4, ${agent.expiration})`,
+          [agent.id, analysisRunId, agent.type, agent.token],
+        );
+      }
+
+      await expect(repository.markRunning(healthyAgentId)).resolves.toBeUndefined();
+      const reclaimed = await repository.markRunning(expiredAgentId);
+      expect(reclaimed).toMatchObject({ status: 'running', agentType: 'security' });
+      expect(reclaimed?.leaseToken).not.toBe(expiredToken);
+      expect(reclaimed?.leaseExpiresAt?.getTime()).toBeGreaterThan(Date.now());
+      await expect(repository.markCompleted(expiredAgentId, expiredToken, { findings: [] }))
+        .resolves.toBeUndefined();
+      const healthy = await repository.findByAnalysisRunAndType(analysisRunId, 'requirements');
+      expect(healthy?.leaseToken).toBe(healthyToken);
+    } finally {
+      await pool.query('DELETE FROM agent_runs WHERE analysis_run_id = $1', [analysisRunId]);
+      await pool.query('DELETE FROM analysis_runs WHERE id = $1', [analysisRunId]);
+      await pool.query('DELETE FROM reviews WHERE id = $1', [reviewId]);
+      await pool.query('DELETE FROM organizations WHERE id = $1', [organizationId]);
+    }
+  });
+
   afterAll(async () => {
-    await app.close();
+    if (app) await app.close();
   });
 });

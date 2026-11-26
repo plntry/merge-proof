@@ -44,7 +44,7 @@ export class ReviewsService {
     private readonly outboxRepository: OutboxRepository,
   ) {}
 
-  async create(dto: CreateReviewDto): Promise<Review> {
+  async create(dto: CreateReviewDto): Promise<Review & { analysisRunId: string }> {
     const client = await this.pool.connect();
 
     try {
@@ -94,7 +94,7 @@ export class ReviewsService {
 
       await client.query('COMMIT');
 
-      return savedReview;
+      return { ...savedReview, analysisRunId: savedAnalysisRun.id };
     } catch (error) {
       await client.query('ROLLBACK');
 

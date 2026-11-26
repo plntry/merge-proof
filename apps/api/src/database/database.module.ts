@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Inject, Module, OnModuleDestroy } from '@nestjs/common';
 import { DATABASE_POOL } from './database.constants.js';
 import { ConfigService } from '@nestjs/config';
 import { Pool } from 'pg';
@@ -21,4 +21,10 @@ import { Pool } from 'pg';
   ],
   exports: [DATABASE_POOL],
 })
-export class DatabaseModule {}
+export class DatabaseModule implements OnModuleDestroy {
+  constructor(@Inject(DATABASE_POOL) private readonly pool: Pool) {}
+
+  async onModuleDestroy() {
+    await this.pool.end();
+  }
+}

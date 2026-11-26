@@ -93,7 +93,7 @@ export class ToolRegistry {
         );
       }
 
-      const definition = this.getDefinitions()[toolName];
+      const definition = this.getDefinitions(context)[toolName];
       const validation = definition.schema.safeParse(preparedArguments.value);
 
       if (!validation.success) {
@@ -170,7 +170,7 @@ export class ToolRegistry {
     }
   }
 
-  private getDefinitions(): Record<ToolName, ToolDefinition> {
+  private getDefinitions(context: ToolExecutionContext): Record<ToolName, ToolDefinition> {
     return {
       getPRMetadata: {
         schema: getPrMetadataInputSchema,
@@ -182,7 +182,8 @@ export class ToolRegistry {
       },
       getFileContent: {
         schema: getFileContentInputSchema,
-        execute: (input) => this.repositorySource.getFileContent(input),
+        execute: (input) =>
+          this.repositorySource.getFileContent(input, context.pullRequestNumber),
       },
       searchRepository: {
         schema: searchRepositoryInputSchema,

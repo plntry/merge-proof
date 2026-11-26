@@ -40,7 +40,7 @@ export type FileContent = {
 
 export type RepositorySearchResult = {
   path: string;
-  line: number;
+  line: number | null;
   snippet: string;
 };
 

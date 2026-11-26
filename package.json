@@ -6,7 +6,14 @@
   "scripts": {
     "dev:api": "pnpm --filter api start:dev",
     "dev:web": "pnpm --filter web dev",
-    "eval": "pnpm --filter api eval"
+    "eval": "pnpm --filter api eval",
+    "test": "pnpm --filter api test",
+    "test:web": "pnpm --filter web test",
+    "test:e2e": "pnpm --filter api test:e2e",
+    "lint": "pnpm --filter api lint && pnpm --filter web lint",
+    "build": "pnpm --filter api build && pnpm --filter web build",
+    "migrate": "pnpm --filter api migrate",
+    "seed:demo": "pnpm --filter api seed:demo"
   },
   "keywords": [],
   "author": "",

@@ -11,8 +11,10 @@ import { OPENAI_CLIENT } from './ai.constants.js';
       useFactory: (configService: ConfigService) => {
         const apiKey = configService.getOrThrow<string>('OPENAI_API_KEY');
 
+        const baseURL = configService.get<string>('OPENAI_BASE_URL');
         return new OpenAI({
           apiKey,
+          ...(baseURL ? { baseURL } : {}),
         });
       },
     },

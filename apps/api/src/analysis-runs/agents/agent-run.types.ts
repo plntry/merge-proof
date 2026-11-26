@@ -23,4 +23,6 @@ export type AgentRun = NewAgentRun & {
   createdAt: Date;
   startedAt: Date | null;
   completedAt: Date | null;
+  leaseToken: string | null;
+  leaseExpiresAt: Date | null;
 };
